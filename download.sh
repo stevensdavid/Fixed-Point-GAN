@@ -1,5 +1,9 @@
 FILE=$1
 
+function gdownload () { 
+    if [[ -n ${2} ]]; then FNAME="-O ${2}" ; fi; wget -q --show-progress --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate "https://docs.google.com/uc?export=download&id=${1}" -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=${1}" $FNAME && rm -rf /tmp/cookies.txt;
+}
+
 if [ $FILE == "celeba" ]; then
 
     # CelebA images
@@ -9,6 +13,18 @@ if [ $FILE == "celeba" ]; then
     wget -N $URL -O $ZIP_FILE
     unzip $ZIP_FILE -d ./data/
     rm $ZIP_FILE
+
+elif [ $FILE == "pcam" ]; then
+    URL=https://drive.google.com/uc?export=download&id=1gHou49cA1s5vua2V5L98Lt8TiWA3FrKB
+    mkdir -p ./data/pcam/
+    gdownload 1qV65ZqZvWzuIVthK8eVDhIwrbnsJdbg_ ./data/pcam/camelyonpatch_level_2_split_test_x.h5.gz
+    gdownload 17BHrSrwWKjYsOgTMmoqrIjDy6Fa2o_gP ./data/pcam/camelyonpatch_level_2_split_test_y.h5.gz
+    gdownload 1g04te-mWB_GvM4TFyhw3xdzrV8xTXPJO ./data/pcam/camelyonpatch_level_2_split_train_mask.h5.gz
+    gdownload 1Ka0XfEMiwgCYPdTI-vv6eUElOBnKFKQ2 ./data/pcam/camelyonpatch_level_2_split_train_x.h5.gz
+    gdownload 1269yhu3pZDP8UYFQs-NYs3FPwuK-nGSG ./data/pcam/camelyonpatch_level_2_split_train_y.h5.gz
+    gdownload 1g04te-1hgshYGWK8V-eGRy8LToWJJgDU_rXWVJ3 ./data/pcam/camelyonpatch_level_2_split_valid_x.h5.gz
+    gdownload 1bH8ZRbhSVAhScTS0p9-ZzGnX91cHT3uO ./data/pcam/camelyonpatch_level_2_split_valid_y.h5.gz
+    gunzip ./data/pcam/*.gz
 
 elif [ $FILE == "brats" ]; then
 
@@ -41,6 +57,6 @@ elif [ $FILE == 'pretrained_brats_256' ]; then
     rm $ZIP_FILE
 
 else
-    echo "Available arguments are celeba, brats, pretrained_celeba_128, and pretrained_brats_256."
+    echo "Available arguments are celeba, pcam, brats, pretrained_celeba_128, and pretrained_brats_256."
     exit 1
 fi
