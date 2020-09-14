@@ -37,6 +37,12 @@ def main(config):
                                    'BRATS', config.mode, config.num_workers)
 
 
+    elif config.dataset in ['PCam']:
+        data_loader = get_loader(config.image_dir, None, None,
+                                   config.crop_size, config.image_size, config.batch_size,
+                                   'PCam', config.mode, config.num_workers)
+
+
     elif config.dataset in ['Directory']:
         data_loader = get_loader(config.image_dir, None, None,
                                  config.crop_size, config.image_size, config.batch_size,
@@ -48,10 +54,10 @@ def main(config):
     
 
     if config.mode == 'train':
-        if config.dataset in ['CelebA', 'BRATS', 'Directory']:
+        if config.dataset in ['CelebA', 'BRATS', 'PCam', 'Directory']:
             solver.train()
     elif config.mode == 'test':
-        if config.dataset in ['CelebA', 'Directory']:
+        if config.dataset in ['CelebA', 'PCam', 'Directory']:
             solver.test()
     elif config.mode == 'test_brats':
         if config.dataset in ['BRATS']:
@@ -76,7 +82,7 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_id', type=float, default=10, help='weight for identity loss')
     
     # Training configuration.
-    parser.add_argument('--dataset', type=str, default='CelebA', choices=['CelebA', 'BRATS', 'Directory'])
+    parser.add_argument('--dataset', type=str, default='CelebA', choices=['CelebA', 'BRATS', 'PCam', 'Directory'])
     parser.add_argument('--batch_size', type=int, default=16, help='mini-batch size')
     parser.add_argument('--num_iters', type=int, default=200000, help='number of total iterations for training D')
     parser.add_argument('--num_iters_decay', type=int, default=100000, help='number of iterations for decaying lr')

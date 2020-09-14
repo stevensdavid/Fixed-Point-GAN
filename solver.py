@@ -72,7 +72,7 @@ class Solver(object):
 
     def build_model(self):
         """Create a generator and a discriminator."""
-        if self.dataset in ['CelebA', 'BRATS', 'Directory']:
+        if self.dataset in ['CelebA', 'BRATS', 'PCam', 'Directory']:
             self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num)
             self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num) 
 
@@ -175,7 +175,7 @@ class Solver(object):
                             c_trg[:, j] = 0
                 else:
                     c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
-            elif dataset == 'BRATS':
+            elif dataset in ['BRATS', 'PCam']:
                 c_trg = c_org.clone()
                 c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
             elif dataset == 'Directory':
@@ -186,7 +186,7 @@ class Solver(object):
 
     def classification_loss(self, logit, target, dataset='CelebA'):
         """Compute binary or softmax cross entropy loss."""
-        if dataset in ['CelebA', 'BRATS']:
+        if dataset in ['CelebA', 'BRATS', 'PCam']:
             return F.binary_cross_entropy_with_logits(logit, target, size_average=False) / logit.size(0)
         elif dataset == 'Directory':
             return F.cross_entropy(logit, target)
@@ -194,7 +194,7 @@ class Solver(object):
     def train(self):
         """Train Fixed-Point GAN within a single dataset."""
         # Set data loader.
-        if self.dataset in ['CelebA', 'BRATS', 'Directory']:
+        if self.dataset in ['CelebA', 'BRATS', 'PCam', 'Directory']:
             data_loader = self.data_loader
 
         # Fetch fixed inputs for debugging.
@@ -233,7 +233,7 @@ class Solver(object):
             rand_idx = torch.randperm(label_org.size(0))
             label_trg = label_org[rand_idx]
 
-            if self.dataset in ['CelebA', 'BRATS']:
+            if self.dataset in ['CelebA', 'BRATS', 'PCam']:
                 c_org = label_org.clone()
                 c_trg = label_trg.clone()
             elif self.dataset == 'Directory':
@@ -378,7 +378,7 @@ class Solver(object):
         self.restore_model(self.test_iters)
         
         # Set data loader.
-        if self.dataset in ['CelebA', 'Directory']:
+        if self.dataset in ['CelebA', 'PCam', 'Directory']:
             data_loader = self.data_loader
         
         with torch.no_grad():
@@ -407,7 +407,7 @@ class Solver(object):
         self.restore_model(self.test_iters)
         
         # Set data loader.
-        if self.dataset in ['BRATS']:
+        if self.dataset in ['BRATS', 'PCam']:
             data_loader = self.data_loader
         
         with torch.no_grad():

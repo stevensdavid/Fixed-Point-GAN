@@ -47,6 +47,12 @@ To download the processed BRATS 2013 synthetic dataset:
 $ bash download.sh brats
 ```
 
+To download the PatchChamelyon dataset:
+
+```bash
+$ bash download.sh pcam
+```
+
 ### 3. Training
 
 Training on CelebA dataset
@@ -70,6 +76,29 @@ $ python main.py --mode train --dataset BRATS --crop_size 256 --image_size 256 -
                  --model_save_dir brats_syn_256_lambda0.1/models \
                  --result_dir brats_syn_256_lambda0.1/results \
                  --batch_size 8 --num_workers 4 --lambda_id 0.1 --num_iters 10000
+```
+
+Training on PatchCamelyon dataset
+
+```bash
+$ python main.py --mode train --dataset PCam --crop_size 96 --image_size 96 --c_dim 1 \
+                 --image_dir data/pcam \
+                 --sample_dir pcam/samples \
+                 --log_dir pcam/logs \
+                 --model_save_dir pcam/models \
+                 --result_dir pcam/results \
+                 --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000
+```
+
+In PowerShell:
+```powershell
+$ python main.py --mode train --dataset PCam --crop_size 96 --image_size 96 --c_dim 1 `
+                 --image_dir data/pcam `
+                 --sample_dir pcam/samples `
+                 --log_dir pcam/logs `
+                 --model_save_dir pcam/models `
+                 --result_dir pcam/results `
+                 --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000
 ```
 
 ### 4. Testing
