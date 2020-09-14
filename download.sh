@@ -17,13 +17,13 @@ if [ $FILE == "celeba" ]; then
 elif [ $FILE == "pcam" ]; then
     # Download PatchCamelyon from Google Drive
     mkdir -p ./data/pcam/
-    gdownload '1qV65ZqZvWzuIVthK8eVDhIwrbnsJdbg_' ./data/pcam/camelyonpatch_level_2_split_test_x.h5.gz
-    gdownload '1qV65ZqZvWzuIVthK8eVDhIwrbnsJdbg_' ./data/pcam/camelyonpatch_level_2_split_test_y.h5.gz
-    gdownload '1g04te-mWB_GvM4TFyhw3xdzrV8xTXPJO' ./data/pcam/camelyonpatch_level_2_split_train_mask.h5.gz
-    gdownload '1Ka0XfEMiwgCYPdTI-vv6eUElOBnKFKQ2' ./data/pcam/camelyonpatch_level_2_split_train_x.h5.gz
-    gdownload '1269yhu3pZDP8UYFQs-NYs3FPwuK-nGSG' ./data/pcam/camelyonpatch_level_2_split_train_y.h5.gz
-    gdownload '1hgshYGWK8V-eGRy8LToWJJgDU_rXWVJ3' ./data/pcam/camelyonpatch_level_2_split_valid_x.h5.gz
-    gdownload '1bH8ZRbhSVAhScTS0p9-ZzGnX91cHT3uO' ./data/pcam/camelyonpatch_level_2_split_valid_y.h5.gz
+    gdownload '1qV65ZqZvWzuIVthK8eVDhIwrbnsJdbg_' ./data/pcam/test_x.h5.gz
+    gdownload '1qV65ZqZvWzuIVthK8eVDhIwrbnsJdbg_' ./data/pcam/test_y.h5.gz
+    gdownload '1g04te-mWB_GvM4TFyhw3xdzrV8xTXPJO' ./data/pcam/train_mask.h5.gz
+    gdownload '1Ka0XfEMiwgCYPdTI-vv6eUElOBnKFKQ2' ./data/pcam/train_x.h5.gz
+    gdownload '1269yhu3pZDP8UYFQs-NYs3FPwuK-nGSG' ./data/pcam/train_y.h5.gz
+    gdownload '1hgshYGWK8V-eGRy8LToWJJgDU_rXWVJ3' ./data/pcam/valid_x.h5.gz
+    gdownload '1bH8ZRbhSVAhScTS0p9-ZzGnX91cHT3uO' ./data/pcam/valid_y.h5.gz
     gunzip ./data/pcam/*.gz
 
 elif [ $FILE == "brats" ]; then
