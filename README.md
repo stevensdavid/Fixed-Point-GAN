@@ -101,6 +101,11 @@ $ python main.py --mode train --dataset PCam --crop_size 96 --image_size 96 --c_
                  --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000
 ```
 
+#### Training ResNet
+```
+$ python resnet.py --mode train --dataset PCam --image_size 96 --crop_size 96 --c_dim 1 --log_dir pcam/logs --model_save_dir pcam/models/resnet --verbose --image_dir data/pcam --epochs 2 --batch_size 1000
+```
+
 ### 4. Testing
 
 Testing on CelebA dataset
