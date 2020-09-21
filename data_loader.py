@@ -7,6 +7,7 @@ import os
 import random
 from glob import glob
 import h5py
+import numpy as np
 
 
 class CelebA(data.Dataset):
@@ -128,15 +129,16 @@ class BRATS_SYN(data.Dataset):
 class PCam(data.Dataset):
     """Dataset class for the PatchCamelyon dataset."""
 
-    def __init__(self, image_dir, transform, mode):
+    def __init__(self, image_dir, transform, mode, in_memory):
         """Initialize and Load the PCam dataset."""
         if mode not in ("train", "test", "val"):
             raise ValueError(f"Support modes are train, test and val, received: {mode}")
         self.image_dir = image_dir
         self.transform = transform
         self.mode = mode
-        self.x_file = None
-        self.y_file = None
+        self.x = None
+        self.y = None
+        self.preloaded = in_memory
         self.num_images = None
         self.load_data()
 
@@ -146,17 +148,24 @@ class PCam(data.Dataset):
             x_file = "train_x.h5"
             y_file = "train_y.h5"
         elif self.mode == "val":
-            x_file = "val_x.h5"
-            y_file = "val_y.h5"
+            x_file = "valid_x.h5"
+            y_file = "valid_y.h5"
         elif self.mode == "test":
             x_file = "test_x.h5"
             y_file = "test_y.h5"
         else:
             raise ValueError(f"Support modes are train, test and val, received: {mode}")
-        self.x_file = os.path.join(self.image_dir, x_file)
-        x = h5py.File(os.path.join(self.image_dir, x_file), 'r', swmr=True)['x']
-        self.num_images = len(x)
-        self.y_file = os.path.join(self.image_dir, y_file)
+        if self.preloaded:
+            print(f"Loading {self.mode}_x")
+            self.x = [self.transform(Image.fromarray(x.astype('uint8'), 'RGB')) for x in h5py.File(os.path.join(self.image_dir, x_file), 'r', swmr=True)['x']]
+            print(f"Loading {self.mode}_y")
+            self.y = [torch.from_numpy(y.flatten()).float() for y in h5py.File(os.path.join(self.image_dir, y_file), 'r', swmr=True)['y']]
+            self.num_images = len(self.x)
+        else:
+            self.x = os.path.join(self.image_dir, x_file)
+            x = h5py.File(os.path.join(self.image_dir, x_file), 'r', swmr=True)['x']
+            self.num_images = len(x)
+            self.y = os.path.join(self.image_dir, y_file)
         # TODO: Pre-loading the files here would be faster, but I have not been able
         #       to make it work as the h5py objects cannot be pickled and can
         #       therefore not be used in PyTorch. This can probably be fixed, but I
@@ -168,8 +177,12 @@ class PCam(data.Dataset):
 
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
-        x = h5py.File(self.x_file, 'r', swmr=True)['x']
-        y = h5py.File(self.y_file, 'r', swmr=True)['y']
+        if self.preloaded:
+            x = self.x[index]
+            y = self.y[index]
+            return self.x[index], self.y[index]
+        x = h5py.File(self.x, 'r', swmr=True)['x']
+        y = h5py.File(self.y, 'r', swmr=True)['y']
         img = Image.fromarray(x[index, ...].astype('uint8'), 'RGB')
         return self.transform(img), torch.from_numpy(y[index, ...].flatten()).float()
 
@@ -179,7 +192,7 @@ class PCam(data.Dataset):
 
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
-               batch_size=16, dataset='CelebA', mode='train', num_workers=1):
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1, in_memory=False):
     """Build and return a data loader."""
     transform = []
     if mode == 'train':
@@ -195,7 +208,7 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
-        dataset = PCam(image_dir, transform, mode)
+        dataset = PCam(image_dir, transform, mode, in_memory)
     
     elif dataset == 'Directory':
         dataset = ImageFolder(image_dir, transform)
