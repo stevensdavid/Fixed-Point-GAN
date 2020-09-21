@@ -153,6 +153,14 @@ $ python main.py --mode test_brats --dataset BRATS --crop_size 256 --image_size 
 $ python brats_auc.py
 ```
 
+### 6. Calculating FID (EXPERIMENTAL, only for PCam)
+See the official [FID implementation](https://github.com/bioinf-jku/TTUR) for more information.
+
+1. Execute `python3 precalc_stats_example.py` (will calculate and store the distribution of real 
+   samples in a file `fix_stats.npz`). Assumes usage of tensorflow 1.x (1.15 was used during experimentation).
+2. Execute `python3 main.py --mode test --dataset PCam --image_size 96 --crop_size 96 --c_dim 1  --log_dir pcam/logs --model_save_dir pretrained_models/pcam --result_dir pcam/results --image_dir data/pcam --test_iters 620000 --lambda_id 0.1 --batch_size 1` (will produce and store generated images from the test dataset). Assumes that a model that has run for 620000 iterations is available for testing.
+2. Execute `python3 fid_example.py` (calculates final FID based on distribution of generated values and estimation of the real distribution). Assumes usage of tensorflow 1.x (1.15 was used during experimentation).
+
 ## Citation
 
 Please cite this work as following:

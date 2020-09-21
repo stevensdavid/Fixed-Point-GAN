@@ -389,7 +389,7 @@ class Solver(object):
                 c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
 
                 # Translate images.
-                x_fake_list = [x_real]
+                x_fake_list = [] # [x_real] # TEMPORARY CHANGE FOR FID EXPERIMENTATION, this along with batch size == 1 allows for individual generated images
                 for c_trg in c_trg_list:
                     x_fake_list.append(torch.tanh(x_real + self.G(x_real, c_trg)))
 
