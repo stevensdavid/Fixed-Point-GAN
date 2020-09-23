@@ -26,8 +26,8 @@ class ResNet(nn.Module):
 def train_resnet(config):
     logger = Logger(config.log_dir)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # device = "cpu"
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = "cpu"
 
     model = ResNet(num_classes=1)
     train_data = get_loader(config.image_dir, None, None,
@@ -66,7 +66,7 @@ def train_resnet(config):
             optimizer.step()
 
             running_loss += loss.item()
-            if config.verbose:
+            if config.verbose or batch_idx % (len(train_iter)//10) == 0:
                 tqdm.write(f"Training batch {batch_idx}/{len(train_iter)} Current loss: {(running_loss / batch_idx):.3f}")
         train_loss = running_loss / len(train_data)
         train_acc = correct_classifications / len(train_data.dataset)
@@ -77,14 +77,14 @@ def train_resnet(config):
             val_loss = 0
             correct_classifications = 0
             for batch_idx, (x, y) in tqdm(enumerate(val_iter, 1), desc="Validating"):
-                x.to(device)
+                x.to(device) 
                 y.to(device)
                 output = model(x)
                 class_pred = output >= 0.5
                 correct_classifications += class_pred.eq(y).sum()
                 loss = loss_function(output, y)
                 val_loss += loss.item()
-                if config.verbose:
+                if config.verbose or batch_idx % (len(val_iter)//10) == 0:
                     tqdm.write(f"Validating batch {batch_idx}/{len(val_iter)} Current loss: {(val_loss / batch_idx):.3f}")
             val_loss = val_loss / len(val_data)
             val_acc = correct_classifications / len(val_data.dataset)
