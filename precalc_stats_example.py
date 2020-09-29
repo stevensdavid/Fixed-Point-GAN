@@ -28,6 +28,8 @@ print("load images..", end=" " , flush=True)
 #images = np.array([imread(str(fn)).astype(np.float32) for fn in image_list])
 files = h5py.File(os.path.join(data_path, 'test_x.h5'), 'r', swmr=True)['x']
 images = np.array([files[index, ...].astype(np.float32) for index in range(len(files))])
+print(images[0,0,0,:])
+exit(0)
 print("%d images found and loaded" % len(images))
 
 print("create inception graph..", end=" ", flush=True)

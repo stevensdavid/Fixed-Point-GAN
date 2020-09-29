@@ -97,6 +97,9 @@ if __name__ == '__main__':
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
+    parser.add_argument('--include_source', type=bool, default=True, help='include column containing source image from output (default: True)')
+    parser.add_argument('--single_image_output', type=bool, default=False, help='output one image for each input image, regardless of batch size used by data loader (default: False)')
+    parser.add_argument('--random_target', type=bool, default=False, help='for each output image during testing, choose class randomly at uniform (default: False)') # NOT YET IMPLEMENTED
 
     # Miscellaneous.
     parser.add_argument('--num_workers', type=int, default=1)

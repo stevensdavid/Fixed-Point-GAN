@@ -48,6 +48,7 @@ class Solver(object):
 
         # Test configurations.
         self.test_iters = config.test_iters
+        self.include_source = config.include_source
 
         # Miscellaneous.
         self.use_tensorboard = config.use_tensorboard
@@ -382,16 +383,24 @@ class Solver(object):
             data_loader = self.data_loader
         
         with torch.no_grad():
-            for i, (x_real, c_org) in enumerate(data_loader):
+            for i, (x_real, c_org) in enumerate(data_loader): # (origin image, origin class)
 
                 # Prepare input images and target domain labels.
                 x_real = x_real.to(self.device)
-                c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
+
+                # TODO: create_labels should have option to generate label at random
+                c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs) # target class list
+
+                x_fake_list = []
+
+                if self.include_source:
+                  x_fake_list = [x_real]
 
                 # Translate images.
-                x_fake_list = [] # [x_real] # TEMPORARY CHANGE FOR FID EXPERIMENTATION, this along with batch size == 1 allows for individual generated images
+                # TODO: If single-output option is chosen, further split this on the rows.
                 for c_trg in c_trg_list:
                     x_fake_list.append(torch.tanh(x_real + self.G(x_real, c_trg)))
+
 
                 # Save the translated images.
                 x_concat = torch.cat(x_fake_list, dim=3)
