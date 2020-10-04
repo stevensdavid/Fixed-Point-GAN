@@ -39,7 +39,14 @@ class CelebA(data.Dataset):
             self.idx2attr[i] = attr_name
 
         lines = lines[2:]
-        random.seed(1234)
+        
+        # very odd that they seem to shuffle the attribute file, 
+        # now the filenames will not appear in order when you fetch them.
+        # actually, since the filename is paired with the label, this is 
+        # perfectly fine -- it just shuffles the input in a reproducible 
+        # manner (see __getitem__, which returns the matching image for a 
+        # label).
+        random.seed(1234) 
         random.shuffle(lines)
         for i, line in enumerate(lines):
             split = line.split()

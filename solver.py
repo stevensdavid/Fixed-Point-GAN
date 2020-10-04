@@ -49,6 +49,8 @@ class Solver(object):
         # Test configurations.
         self.test_iters = config.test_iters
         self.include_source = config.include_source
+        self.single_image_output = config.single_image_output
+        self.random_target = config.random_target
 
         # Miscellaneous.
         self.use_tensorboard = config.use_tensorboard
@@ -165,22 +167,37 @@ class Solver(object):
                 if attr_name in ['Black_Hair', 'Blond_Hair', 'Brown_Hair', 'Gray_Hair']:
                     hair_color_indices.append(i)
 
+        # Note that we may select multiple hair colors from the origin, but the target will 
+        # always choose at most one hair color (it seems that Gray_Hair has highest priority)
+        # Actually, it seems that all are added one after another, each one gets its own 
+        # iteration of "i" if it is one of the selected attributes.
         c_trg_list = []
         for i in range(c_dim):
             if dataset in ['CelebA']:
                 c_trg = c_org.clone()
                 if i in hair_color_indices:  # Set one hair color to 1 and the rest to 0.
-                    c_trg[:, i] = 1
+                    c_trg[:, i] = 1 # the rows represent data units in the batch
                     for j in hair_color_indices:
                         if j != i:
                             c_trg[:, j] = 0
                 else:
-                    c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
+                    if c_dim == 1 and self.random_target is not None:
+                      # for each element in batch, choose random outcome between 0 and 1.
+                      # c_dim == 1 means "i" is the only attribute, i.e only column.
+                      # we only do this when we have 1 attribute; when multiple attributes 
+                      # are present, we would need to supply a list of probabilities, one 
+                      # for each attribute.
+                      c_trg[:, i] = torch.tensor(np.random.binomial(1, self.random_target, self.batch_size))
+                    else:
+                      c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
             elif dataset in ['BRATS', 'PCam']:
-                c_trg = c_org.clone()
+              c_trg = c_org.clone()
+              if c_dim == 1 and self.random_target is not None:
+                c_trg[:, i] = torch.tensor(np.random.binomial(1, self.random_target, self.batch_size))
+              else:
                 c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
             elif dataset == 'Directory':
-                c_trg = self.label2onehot(torch.ones(c_org.size(0))*i, c_dim)
+              c_trg = self.label2onehot(torch.ones(c_org.size(0))*i, c_dim)
 
             c_trg_list.append(c_trg.to(self.device))
         return c_trg_list
@@ -403,10 +420,18 @@ class Solver(object):
 
 
                 # Save the translated images.
-                x_concat = torch.cat(x_fake_list, dim=3)
-                result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
-                save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
-                print('Saved real and fake images into {}...'.format(result_path))
+                
+                if self.single_image_output:
+                  x_concat = torch.cat(x_fake_list, dim=3) # merge all in batch into one image
+                  for j in range(self.batch_size):
+                    result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i*self.batch_size+j+1))
+                    save_image(self.denorm(x_concat[j].data.cpu()), result_path, nrow=1, padding=0)
+                    print('Saved real and fake images into {}...'.format(result_path))
+                else:
+                  x_concat = torch.cat(x_fake_list, dim=3) # merge all in batch into one image
+                  result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                  save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
+                  print('Saved real and fake images into {}...'.format(result_path))
 
 
 

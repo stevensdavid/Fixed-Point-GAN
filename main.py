@@ -97,9 +97,10 @@ if __name__ == '__main__':
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
-    parser.add_argument('--include_source', type=bool, default=True, help='include column containing source image from output (default: True)')
-    parser.add_argument('--single_image_output', type=bool, default=False, help='output one image for each input image, regardless of batch size used by data loader (default: False)')
-    parser.add_argument('--random_target', type=bool, default=False, help='for each output image during testing, choose class randomly at uniform (default: False)') # NOT YET IMPLEMENTED
+    parser.add_argument('--include_source', default=True, dest="include_source", action="store_true", help='include column containing source image from output (included by default)')
+    parser.add_argument('--exclude_source', dest="include_source", action="store_false", help='exclude column containing source image from output')
+    parser.add_argument('--single_image_output', default=False, dest="single_image_output", action="store_true", help='output one image for each input image, regardless of batch size used by data loader (default: False)')
+    parser.add_argument('--random_target', type=float, default=None, help='select target domain 1 with the specified probability \'p\', and select the other target domain (0) with probability \'1-p\'. Only supported for PCam and CelebA. Assumes binary label for target domain (default: None -- this always chooses the opposite label)') # NOT YET IMPLEMENTED
 
     # Miscellaneous.
     parser.add_argument('--num_workers', type=int, default=1)
