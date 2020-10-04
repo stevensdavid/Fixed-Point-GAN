@@ -66,6 +66,27 @@ $ python main.py --mode train --dataset CelebA --image_size 128 --c_dim 5 \
                  --selected_attrs Black_Hair Blond_Hair Brown_Hair Male Young --lambda_id 10
 ```
 
+Training on CelebA with glasses as attribute:
+
+```bash
+$ python main.py --mode train --dataset CelebA --image_size 128 --c_dim 1 \
+                 --sample_dir celeba/samples \
+                 --log_dir celeba/logs \
+                 --model_save_dir celeba/models \
+                 --result_dir celeba/results \
+                 --selected_attrs Eyeglasses --lambda_id 10
+```
+
+In PowerShell:
+```powershell
+$ python main.py --mode train --dataset CelebA --image_size 128 --c_dim 5 `
+                 --sample_dir celeba/samples `
+                 --log_dir celeba/logs `
+                 --model_save_dir celeba/models `
+                 --result_dir celeba/results `
+                 --selected_attrs Eyeglasses --lambda_id 10
+```
+
 Training on BRATS dataset
 
 ```bash
@@ -112,6 +133,28 @@ $ python main.py --mode test --dataset CelebA --image_size 128 --c_dim 5 \
                  --model_save_dir celeba/models \
                  --result_dir celeba/results \
                  --selected_attrs Black_Hair Blond_Hair Brown_Hair Male Young --lambda_id 10
+```
+
+Testing on CelebA dataset with glasses as attribute
+
+```bash
+$ python main.py --mode test --dataset CelebA --image_size 128 --c_dim 5 \
+                 --sample_dir celeba/samples \
+                 --log_dir celeba/logs \
+                 --model_save_dir celeba/models \
+                 --result_dir celeba/results \
+                 --selected_attrs Eyeglasses --lambda_id 10
+```
+
+In PowerShell
+
+```powershell
+$ python main.py --mode test --dataset CelebA --image_size 128 --c_dim 5 `
+                 --sample_dir celeba/samples `
+                 --log_dir celeba/logs `
+                 --model_save_dir celeba/models `
+                 --result_dir celeba/results `
+                 --selected_attrs Eyeglasses --lambda_id 10
 ```
 
 Testing on BRATS dataset
