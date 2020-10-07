@@ -97,7 +97,15 @@ def get_activations(images, sess, batch_size=50, verbose=False):
         else:
             end = n_images
         
-        batch = images[start:end]
+        # added cast to float32, since that is what imread does 
+        # (but since PCam is directly from h5py.File that returns
+        # RGB 0-255 as integers, we cannot seem to change the h5py
+        # without loading the entire data into memory (the other 
+        # alternative would be to hack h5py a bit but that might 
+        # lead to unintentional consequences). So this solution 
+        # just makes sure everything is cast correctly on a per-
+        # batch basis.
+        batch = images[start:end].astype(np.float32)
         pred = sess.run(inception_layer, {'FID_Inception_Net/ExpandDims:0': batch})
         pred_arr[start:end] = pred.reshape(batch.shape[0],-1)
     if verbose:
@@ -231,7 +239,7 @@ def get_activations_from_files(files, sess, batch_size=50, verbose=False):
         
         batch = load_image_batch(files[start:end])
         pred = sess.run(inception_layer, {'FID_Inception_Net/ExpandDims:0': batch})
-        pred_arr[start:end] = pred.reshape(batch_size,-1)
+        pred_arr[start:end] = pred.reshape(batch.shape[0],-1)
         del batch #clean up memory
     if verbose:
         print(" done")
