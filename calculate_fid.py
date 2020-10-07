@@ -34,7 +34,7 @@ if __name__ == "__main__":
         """ .replace("\n", "").split()
     elif config.dataset == "CelebA":
         command = f"""
-            {config.python} main.py --mode test --dataset CelebA --image_dir data/celeba
+            {config.python} main.py --mode test --dataset CelebA --image_dir data/celeba/images
             --image_size 128 --crop_size 128 --c_dim 1  
             --model_save_dir pretrained_models/celeba 
             --result_dir celeba/results --test_iters {config.test_iters}
