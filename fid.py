@@ -25,6 +25,7 @@ from imageio import imread
 from scipy import linalg
 import pathlib
 import urllib
+from tqdm import tqdm
 import warnings
 
 class InvalidFIDException(Exception):
@@ -87,7 +88,7 @@ def get_activations(images, sess, batch_size=50, verbose=False):
         batch_size = n_images
     n_batches = n_images//batch_size # drops the last batch if < batch_size
     pred_arr = np.empty((n_batches * batch_size,2048))
-    for i in range(n_batches):
+    for i in tqdm(range(n_batches), desc="Calculating FID activations"):
         if verbose:
             print("\rPropagating batch %d/%d" % (i+1, n_batches), end="", flush=True)
         start = i*batch_size
@@ -228,7 +229,7 @@ def get_activations_from_files(files, sess, batch_size=50, verbose=False):
         batch_size = n_imgs
     n_batches = n_imgs//batch_size + 1
     pred_arr = np.empty((n_imgs,2048))
-    for i in range(n_batches):
+    for i in tqdm(range(n_batches), desc="Calculating FID activations"):
         if verbose:
             print("\rPropagating batch %d/%d" % (i+1, n_batches), end="", flush=True)
         start = i*batch_size

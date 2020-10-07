@@ -400,7 +400,7 @@ class Solver(object):
             data_loader = self.data_loader
         
         with torch.no_grad():
-            for i, (x_real, c_org) in enumerate(data_loader): # (origin image, origin class)
+            for i, (x_real, c_org) in tqdm(enumerate(data_loader), desc="Generating images", total=len(data_loader)): # (origin image, origin class)
 
                 # Prepare input images and target domain labels.
                 x_real = x_real.to(self.device)
