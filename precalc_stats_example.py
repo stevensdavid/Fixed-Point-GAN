@@ -7,12 +7,16 @@ from scipy.misc import imread
 import tensorflow as tf
 import h5py
 from PIL import Image
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+parser.add_argument("--dataset", type=str, default="PCam", choices=["CelebA", "PCam"])
+parser.add_argument("--image_format", type=str, default="jpg", choices=["jpg", "png"])
+config = parser.parse_args()
 
 ########
 # PATHS
 ########
-data_path = 'data/pcam' # set path to training set images
-output_path = 'fid_stats.npz' # path for where to store the statistics
 # if you have downloaded and extracted
 #   http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz
 # set this path to the directory where the extracted files are, otherwise
@@ -24,12 +28,16 @@ print("ok")
 
 # loads all images into memory (this might require a lot of RAM!)
 print("load images..", end=" " , flush=True)
-#image_list = glob.glob(os.path.join(data_path, '*.jpg'))
-#images = np.array([imread(str(fn)).astype(np.float32) for fn in image_list])
-files = h5py.File(os.path.join(data_path, 'test_x.h5'), 'r', swmr=True)['x']
-images = np.array([files[index, ...].astype(np.float32) for index in range(len(files))])
-print(images[0,0,0,:])
-exit(0)
+if config.dataset == "CelebA":
+    data_path = "data/celeba/images"
+    image_list = glob.glob(os.path.join(data_path, f'*.{config.image_format}'))
+    images = np.array([imread(str(fn)).astype(np.float32) for fn in image_list])
+    output_path = 'fid_stats_celeba.npz' # path for where to store the statistics
+elif config.dataset == "PCam":
+    data_path = 'data/pcam' # set path to training set images
+    files = h5py.File(os.path.join(data_path, 'test_x.h5'), 'r', swmr=True)['x']
+    images = np.array([files[index, ...].astype(np.float32) for index in range(len(files))])
+    output_path = 'fid_stats_pcam.npz' # path for where to store the statistics
 print("%d images found and loaded" % len(images))
 
 print("create inception graph..", end=" ", flush=True)
