@@ -231,6 +231,10 @@ class Solver(object):
             start_iters = self.resume_iters
             self.restore_model(self.resume_iters)
 
+        d_scaler = torch.cuda.amp.GradScaler()
+        g_scaler = torch.cuda.amp.GradScaler()
+        self.D.to(self.device)
+        self.G.to(self.device)
         # Start training.
         print('Start training...')
         start_time = time.time()
@@ -267,29 +271,32 @@ class Solver(object):
             # =================================================================================== #
             #                             2. Train the discriminator                              #
             # =================================================================================== #
+            with torch.cuda.amp.autocast():
+                # Compute loss with real images.
+                out_src, out_cls = self.D(x_real)
+                d_loss_real = - torch.mean(out_src)
+                d_loss_cls = self.classification_loss(out_cls, label_org, self.dataset)
 
-            # Compute loss with real images.
-            out_src, out_cls = self.D(x_real)
-            d_loss_real = - torch.mean(out_src)
-            d_loss_cls = self.classification_loss(out_cls, label_org, self.dataset)
+                # Compute loss with fake images.
+                delta = self.G(x_real, c_trg)
+                x_fake = torch.tanh(x_real + delta)
+                out_src, out_cls = self.D(x_fake.detach())
+                d_loss_fake = torch.mean(out_src)
 
-            # Compute loss with fake images.
-            delta = self.G(x_real, c_trg)
-            x_fake = torch.tanh(x_real + delta)
-            out_src, out_cls = self.D(x_fake.detach())
-            d_loss_fake = torch.mean(out_src)
+                # Compute loss for gradient penalty.
+                alpha = torch.rand(x_real.size(0), 1, 1, 1).to(self.device)
+                x_hat = (alpha * x_real.data + (1 - alpha) * x_fake.data).requires_grad_(True)
+                out_src, _ = self.D(x_hat)
+                d_loss_gp = self.gradient_penalty(out_src, x_hat)
 
-            # Compute loss for gradient penalty.
-            alpha = torch.rand(x_real.size(0), 1, 1, 1).to(self.device)
-            x_hat = (alpha * x_real.data + (1 - alpha) * x_fake.data).requires_grad_(True)
-            out_src, _ = self.D(x_hat)
-            d_loss_gp = self.gradient_penalty(out_src, x_hat)
-
-            # Backward and optimize.
-            d_loss = d_loss_real + d_loss_fake + self.lambda_cls * d_loss_cls + self.lambda_gp * d_loss_gp
+                # Backward and optimize.
+                d_loss = d_loss_real + d_loss_fake + self.lambda_cls * d_loss_cls + self.lambda_gp * d_loss_gp
             self.reset_grad()
-            d_loss.backward()
-            self.d_optimizer.step()
+            d_scaler.scale(d_loss).backward()
+            d_scaler.step(self.d_optimizer)
+            d_scaler.update()
+            # d_loss.backward()
+            # self.d_optimizer.step()
 
             # Logging.
             loss = {}
@@ -303,38 +310,41 @@ class Solver(object):
             # =================================================================================== #
             
             if (i+1) % self.n_critic == 0:
-                # Original-to-target domain.
-                delta = self.G(x_real, c_trg)
-                x_fake = torch.tanh(x_real + delta)
-                out_src, out_cls = self.D(x_fake)
-                g_loss_fake = - torch.mean(out_src)
-                g_loss_cls = self.classification_loss(out_cls, label_trg, self.dataset)
+                with torch.cuda.amp.autocast():
+                    # Original-to-target domain.
+                    delta = self.G(x_real, c_trg)
+                    x_fake = torch.tanh(x_real + delta)
+                    out_src, out_cls = self.D(x_fake)
+                    g_loss_fake = - torch.mean(out_src)
+                    g_loss_cls = self.classification_loss(out_cls, label_trg, self.dataset)
 
-                # Original-to-original domain.
-                delta_id = self.G(x_real, c_org)
-                x_fake_id = torch.tanh(x_real + delta_id)
-                out_src_id, out_cls_id = self.D(x_fake_id)
-                g_loss_fake_id = - torch.mean(out_src_id)
-                g_loss_cls_id = self.classification_loss(out_cls_id, label_org, self.dataset)
-                g_loss_id = torch.mean(torch.abs(x_real - torch.tanh(delta_id + x_real)))
+                    # Original-to-original domain.
+                    delta_id = self.G(x_real, c_org)
+                    x_fake_id = torch.tanh(x_real + delta_id)
+                    out_src_id, out_cls_id = self.D(x_fake_id)
+                    g_loss_fake_id = - torch.mean(out_src_id)
+                    g_loss_cls_id = self.classification_loss(out_cls_id, label_org, self.dataset)
+                    g_loss_id = torch.mean(torch.abs(x_real - torch.tanh(delta_id + x_real)))
 
-                # Target-to-original domain.
-                delta_reconst = self.G(x_fake, c_org)
-                x_reconst = torch.tanh(x_fake + delta_reconst)
-                g_loss_rec = torch.mean(torch.abs(x_real - x_reconst))
+                    # Target-to-original domain.
+                    delta_reconst = self.G(x_fake, c_org)
+                    x_reconst = torch.tanh(x_fake + delta_reconst)
+                    g_loss_rec = torch.mean(torch.abs(x_real - x_reconst))
 
-                # Original-to-original domain.
-                delta_reconst_id = self.G(x_fake_id, c_org)
-                x_reconst_id = torch.tanh(x_fake_id + delta_reconst_id)
-                g_loss_rec_id = torch.mean(torch.abs(x_real - x_reconst_id))
+                    # Original-to-original domain.
+                    delta_reconst_id = self.G(x_fake_id, c_org)
+                    x_reconst_id = torch.tanh(x_fake_id + delta_reconst_id)
+                    g_loss_rec_id = torch.mean(torch.abs(x_real - x_reconst_id))
 
-                # Backward and optimize.
-                g_loss_same = g_loss_fake_id + self.lambda_rec * g_loss_rec_id + self.lambda_cls * g_loss_cls_id + self.lambda_id * g_loss_id
-                g_loss = g_loss_fake + self.lambda_rec * g_loss_rec + self.lambda_cls * g_loss_cls + g_loss_same
-
+                    # Backward and optimize.
+                    g_loss_same = g_loss_fake_id + self.lambda_rec * g_loss_rec_id + self.lambda_cls * g_loss_cls_id + self.lambda_id * g_loss_id
+                    g_loss = g_loss_fake + self.lambda_rec * g_loss_rec + self.lambda_cls * g_loss_cls + g_loss_same
                 self.reset_grad()
-                g_loss.backward()
-                self.g_optimizer.step()
+                g_scaler.scale(g_loss).backward()
+                g_scaler.step(self.g_optimizer)
+                g_scaler.update()
+                # g_loss.backward()
+                # self.g_optimizer.step()
 
                 # Logging.
                 loss['G/loss_fake'] = g_loss_fake.item()
