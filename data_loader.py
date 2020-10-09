@@ -12,13 +12,14 @@ import h5py
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
 
-    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode):
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, all_data):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
         self.attr_path = attr_path
         self.selected_attrs = selected_attrs
         self.transform = transform
         self.mode = mode
+        self.all_data = all_data
         self.train_dataset = []
         self.test_dataset = []
         self.attr2idx = {}
@@ -61,6 +62,8 @@ class CelebA(data.Dataset):
             if (i+1) < 2000:
                 self.test_dataset.append([filename, label])
             else:
+                if self.all_data == True:
+                  self.test_dataset.append([filename, label])
                 self.train_dataset.append([filename, label])
 
         print('Finished preprocessing the CelebA dataset...')
@@ -186,7 +189,7 @@ class PCam(data.Dataset):
 
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
-               batch_size=16, dataset='CelebA', mode='train', num_workers=1):
+               batch_size=16, dataset='CelebA', mode='train', all_data=False, num_workers=1):
     """Build and return a data loader."""
     transform = []
     if mode == 'train':
@@ -198,7 +201,7 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     transform = T.Compose(transform)
 
     if dataset == 'CelebA':
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode)
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, all_data)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':

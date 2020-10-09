@@ -28,7 +28,7 @@ def main(config):
     if config.dataset in ['CelebA']:
         data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
                                    config.crop_size, config.image_size, config.batch_size,
-                                   'CelebA', config.mode, config.num_workers)
+                                   'CelebA', config.mode, config.all_data, config.num_workers)
 
 
     elif config.dataset in ['BRATS']:
@@ -97,10 +97,11 @@ if __name__ == '__main__':
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
-    parser.add_argument('--include_source', default=True, dest="include_source", action="store_true", help='include column containing source image from output (included by default)')
+    parser.add_argument('--include_source', default=True, dest="include_source", action="store_true", help='include column containing source image from output (included by default; if single_image_output is specified, include_source is always set to false)')
     parser.add_argument('--exclude_source', dest="include_source", action="store_false", help='exclude column containing source image from output')
     parser.add_argument('--single_image_output', default=False, dest="single_image_output", action="store_true", help='output one image for each input image, regardless of batch size used by data loader (default: False)')
-    parser.add_argument('--random_target', type=float, default=None, help='select target domain 1 with the specified probability \'p\', and select the other target domain (0) with probability \'1-p\'. Only supported for PCam and CelebA. Assumes binary label for target domain (default: None -- this always chooses the opposite label)') # NOT YET IMPLEMENTED
+    parser.add_argument('--random_target', type=float, default=None, help='select target domain 1 with the specified probability \'p\', and select the other target domain (0) with probability \'1-p\'. Only supported for PCam and CelebA. Assumes binary label for target domain (default: None -- this always chooses the opposite label)')
+    parser.add_argument('--all_data', default=False, dest="all_data", action="store_true", help='Use both the training and test data during testing. Only works for the CelebA dataset -- ignored for other datasets. Default: False')
     
     # Miscellaneous.
     parser.add_argument('--num_workers', type=int, default=1)

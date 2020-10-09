@@ -35,7 +35,7 @@ if __name__ == "__main__":
     elif config.dataset == "CelebA":
         command = f"""
             {config.python} main.py --mode test --dataset CelebA --image_dir data/celeba/images
-            --image_size 128 --crop_size 128 --c_dim 1  
+            --image_size 128 --crop_size 128 --c_dim 1 --all_data
             --model_save_dir pretrained_models/celeba 
             --result_dir celeba/results --test_iters {config.test_iters}
             --batch_size {config.batch_size} --random_target {config.class_distribution} 
