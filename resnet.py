@@ -15,14 +15,14 @@ class ResNet(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
         self.model = resnet50(pretrained=False, num_classes=num_classes)
-        self.activation = nn.Softmax()
+        self.activation = nn.Sigmoid()
         # self.activation = nn.Identity()
         # Make AVG pooling input shape independent
         self.model.avgpool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x):
         x = self.model(x)
-        return x
+        return self.activation(x)
 
     def predict(self, x):
         x = self.forward(x)
@@ -32,8 +32,8 @@ class ResNet(nn.Module):
 
 def train_resnet(config):
     logger = Logger(config.log_dir)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = "cpu"
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cuda":
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     # device = "cpu"
@@ -96,7 +96,7 @@ def train_resnet(config):
             scaler.step(optimizer)
             scaler.update()
 
-            pred = nn.functional.softmax(output) >= 0.5
+            pred = output >= 0.5
             running_loss += loss.item()
             correct_classifications += pred.eq(y).sum().item()
             if config.verbose:
@@ -119,7 +119,7 @@ def train_resnet(config):
                 y = y.to(device)
                 with torch.cuda.amp.autocast():
                     output = model(x).to(device)
-                    pred = nn.functional.softmax(output) >= 0.5
+                    pred = output >= 0.5
                     correct_classifications += pred.eq(y).sum().item()
                     loss = loss_function(output, y).to(device)
                 val_loss += loss.item()
