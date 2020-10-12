@@ -1,5 +1,5 @@
 import torch
-from torchvision.models import resnet18
+from torchvision.models import resnet50
 from data_loader import get_loader
 from argparse import ArgumentParser
 from main import str2bool
@@ -14,19 +14,28 @@ import os
 class ResNet(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        self.model = resnet18(pretrained=False, num_classes=num_classes)
-        self.activation = nn.Sigmoid()
+        self.model = resnet50(pretrained=False, num_classes=num_classes)
+        self.activation = nn.Softmax()
+        # self.activation = nn.Identity()
+        # Make AVG pooling input shape independent
+        self.model.avgpool = nn.AdaptiveAvgPool2d(1)
 
     def forward(self, x):
         x = self.model(x)
-        x = self.activation(x)
         return x
+
+    def predict(self, x):
+        x = self.forward(x)
+        return self.activation(x)
+
 
 
 def train_resnet(config):
     logger = Logger(config.log_dir)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device == "cuda":
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
     # device = "cpu"
 
     model = ResNet(num_classes=1)
@@ -54,9 +63,8 @@ def train_resnet(config):
         config.num_workers,
         config.in_memory,
     )
-    train_iter, val_iter = iter(train_data), iter(val_data)
 
-    loss_function = nn.BCELoss()
+    loss_function = nn.BCEWithLogitsLoss() 
     optimizer = optim.Adam(
         model.parameters(), lr=config.lr, betas=[config.beta1, config.beta2]
     )
@@ -67,31 +75,36 @@ def train_resnet(config):
     tests_since_best = 0
 
     loss_log = {}
+    model.to(device)
 
-    for epoch in tqdm(range(1, config.epochs + 1), desc="Epochs"):
+    for epoch in tqdm(range(1, config.epochs + 1), desc="Epochs", disable=not config.progress_bar):
         model.train()
         running_loss = 0.0
         correct_classifications = 0
         # Training
-        for batch_idx, (x, y) in enumerate(train_iter, 1):
+        for batch_idx, (x, y) in enumerate(train_data, 1):
+            model.train()
             optimizer.zero_grad()
-            x.to(device)
-            y.to(device)
+            x = x.to(device)
+            y = y.to(device)
             with torch.cuda.amp.autocast():
-                output = model(x)
-                class_pred = output >= 0.5
-                correct_classifications += class_pred.eq(y).sum()
-
-                loss = loss_function(output, y)
+                output = model(x).to(device)
+                # class_pred = output >= 0.5
+                # correct_classifications += class_pred.eq(y).sum()
+                loss = loss_function(output, y).to(device)
             scaler.scale(loss).backward()
-
             scaler.step(optimizer)
             scaler.update()
 
+            pred = nn.functional.softmax(output) >= 0.5
             running_loss += loss.item()
+            correct_classifications += pred.eq(y).sum().item()
             if config.verbose:
+                n_samples = batch_idx * config.batch_size
+                current_loss = running_loss / batch_idx
+                current_acc = correct_classifications / n_samples
                 tqdm.write(
-                    f"Training batch {batch_idx}/{len(train_iter)} Current loss: {(running_loss / batch_idx):.3f}"
+                        f"Training batch {batch_idx}/{len(train_data)} Current loss: {current_loss:.4f} Current accuracy: {current_acc:.4f}"
                 )
         train_loss = running_loss / len(train_data)
         train_acc = correct_classifications / len(train_data.dataset)
@@ -101,18 +114,21 @@ def train_resnet(config):
             model.eval()
             val_loss = 0
             correct_classifications = 0
-            for batch_idx, (x, y) in tqdm(enumerate(val_iter, 1), desc="Validating"):
-                x.to(device) 
-                y.to(device)
+            for batch_idx, (x, y) in tqdm(enumerate(val_data, 1), desc="Validating", disable=not config.progress_bar):
+                x = x.to(device)
+                y = y.to(device)
                 with torch.cuda.amp.autocast():
-                    output = model(x)
-                    class_pred = output >= 0.5
-                    correct_classifications += class_pred.eq(y).sum()
-                    loss = loss_function(output, y)
+                    output = model(x).to(device)
+                    pred = nn.functional.softmax(output) >= 0.5
+                    correct_classifications += pred.eq(y).sum().item()
+                    loss = loss_function(output, y).to(device)
                 val_loss += loss.item()
                 if config.verbose:
+                    n_samples = batch_idx * config.batch_size
+                    cur_val_loss = val_loss / batch_idx
+                    cur_val_acc = correct_classifications / n_samples
                     tqdm.write(
-                        f"Validating batch {batch_idx}/{len(val_iter)} Current loss: {(val_loss / batch_idx):.3f}"
+                            f"Validating batch {batch_idx}/{len(val_data)} Current loss: {cur_val_loss:.4f} Current accuracy: {cur_val_acc:.4f}"
                     )
             val_loss = val_loss / len(val_data)
             val_acc = correct_classifications / len(val_data.dataset)
@@ -124,7 +140,7 @@ def train_resnet(config):
         loss_log["val_acc"] = val_acc
 
         tqdm.write(
-            f"Epoch: {epoch} Training loss: {train_loss:.3f} Training accuracy: {train_acc:.3f} Validation loss: {val_loss:.3f} Validation accuracy: {val_acc:.3f}"
+            f"Epoch: {epoch} Training loss: {train_loss:.4f} Training accuracy: {train_acc:.4f} Validation loss: {val_loss:.4f} Validation accuracy: {val_acc:.4f}"
         )
 
         if config.use_tensorboard:
@@ -136,6 +152,8 @@ def train_resnet(config):
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 tests_since_best = 0
+                best_model_save_path = os.path.join(config.model_save_dir, "pcam_resnet_best.ckpt")
+                torch.save(model.state_dict(), best_model_save_path)
             else:
                 tests_since_best += 1
                 if tests_since_best > config.patience:
@@ -195,6 +213,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--verbose", action="store_true", help="Print loss after each batch"
     )
+    parser.add_argument("--progress_bar", action="store_true", help="Print progress bars")
 
     # Directories.
     parser.add_argument("--image_dir", type=str, default="data/pcam")
