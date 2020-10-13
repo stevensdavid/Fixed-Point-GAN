@@ -115,15 +115,15 @@ def train_resnet(config):
                 n_samples = batch_idx * config.batch_size
                 current_loss = running_loss / batch_idx
                 current_acc = correct_classifications / n_samples
-                current_sensitivity = correct_positive / n_positive_samples
-                current_specificity = correct_negative / n_negative_samples
+                current_sensitivity = correct_positive / max(n_positive_samples, 1)
+                current_specificity = correct_negative / max(n_negative_samples, 1)
                 tqdm.write(
                         f"Training batch {batch_idx}/{len(train_data)} Current loss: {current_loss:.4f} Current accuracy: {current_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
                 )
         train_loss = running_loss / len(train_data)
         train_acc = correct_classifications / len(train_data.dataset)
-        train_sensitivity = correct_positive / n_positive_samples
-        train_specificity = correct_negative / n_negative_samples
+        train_sensitivity = correct_positive / max(n_positive_samples, 1)
+        train_specificity = correct_negative / max(n_negative_samples, 1)
 
         # Validating
         tqdm.write("Validating")
@@ -152,21 +152,21 @@ def train_resnet(config):
                     n_samples = batch_idx * config.batch_size
                     cur_val_loss = val_loss / batch_idx
                     cur_val_acc = correct_classifications / n_samples
-                    current_sensitivity = correct_positive / n_positive_samples
-                    current_specificity = correct_negative / n_negative_samples
+                    current_sensitivity = correct_positive / max(n_positive_samples, 1)
+                    current_specificity = correct_negative / max(n_negative_samples, 1)
                     tqdm.write(
                             f"Validating batch {batch_idx}/{len(val_data)} Current loss: {cur_val_loss:.4f} Current accuracy: {cur_val_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
                     )
             val_loss = val_loss / len(val_data)
             val_acc = correct_classifications / len(val_data.dataset)
-            val_specificty = correct_positive / n_positive_samples
-            val_sensitivity = correct_negative / n_negative_samples
+            val_specificty = correct_positive / max(n_positive_samples, 1)
+            val_sensitivity = correct_negative / max(n_negative_samples, 1)
 
         # Logging
         loss_log["train_loss"] = train_loss
         loss_log["train_acc"] = train_acc
         loss_log["train_spec"] = train_specificity
-        loss_los["train_sens"] = train_sensitivity
+        loss_log["train_sens"] = train_sensitivity
         loss_log["val_loss"] = val_loss
         loss_log["val_acc"] = val_acc
         loss_log["val_spec"] = val_specificty
