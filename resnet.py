@@ -1,5 +1,9 @@
+# Ignore futurewarnings from using old version of tensorboard
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 import torch
-from torchvision.models import resnet50
+from torchvision.models import resnet152
 from data_loader import get_loader
 from argparse import ArgumentParser
 from main import str2bool
@@ -14,7 +18,7 @@ import os
 class ResNet(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        self.model = resnet50(pretrained=False, num_classes=num_classes)
+        self.model = resnet152(pretrained=False, num_classes=num_classes)
         self.activation = nn.Sigmoid()
         # self.activation = nn.Identity()
         # Make AVG pooling input shape independent
@@ -32,8 +36,7 @@ class ResNet(nn.Module):
 
 def train_resnet(config):
     logger = Logger(config.log_dir)
-    device = "cpu"
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cuda":
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     # device = "cpu"
@@ -41,24 +44,24 @@ def train_resnet(config):
     model = ResNet(num_classes=1)
     train_data = get_loader(
         config.image_dir,
-        None,
-        None,
+        config.attr_path,
+        config.selected_attrs,
         config.crop_size,
         config.image_size,
         config.batch_size,
-        "PCam",
+        config.dataset,
         "train",
         config.num_workers,
         config.in_memory,
     )
     val_data = get_loader(
         config.image_dir,
-        None,
-        None,
+        config.attr_path,
+        config.selected_attrs,
         config.crop_size,
         config.image_size,
         config.batch_size,
-        "PCam",
+        config.dataset,
         "val",
         config.num_workers,
         config.in_memory,
@@ -81,7 +84,12 @@ def train_resnet(config):
         model.train()
         running_loss = 0.0
         correct_classifications = 0
+        n_positive_samples = 0
+        n_negative_samples = 0
+        correct_positive = 0
+        correct_negative = 0
         # Training
+        tqdm.write("Training")
         for batch_idx, (x, y) in enumerate(train_data, 1):
             model.train()
             optimizer.zero_grad()
@@ -99,48 +107,73 @@ def train_resnet(config):
             pred = output >= 0.5
             running_loss += loss.item()
             correct_classifications += pred.eq(y).sum().item()
+            n_positive_samples += y.sum()
+            n_negative_samples += (1-y).sum()
+            correct_positive += pred.eq(y).logical_and(y).sum().item()
+            correct_negative += pred.eq(y).logical_and(1-y).sum().item()
             if config.verbose:
                 n_samples = batch_idx * config.batch_size
                 current_loss = running_loss / batch_idx
                 current_acc = correct_classifications / n_samples
+                current_sensitivity = correct_positive / n_positive_samples
+                current_specificity = correct_negative / n_negative_samples
                 tqdm.write(
-                        f"Training batch {batch_idx}/{len(train_data)} Current loss: {current_loss:.4f} Current accuracy: {current_acc:.4f}"
+                        f"Training batch {batch_idx}/{len(train_data)} Current loss: {current_loss:.4f} Current accuracy: {current_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
                 )
         train_loss = running_loss / len(train_data)
         train_acc = correct_classifications / len(train_data.dataset)
+        train_sensitivity = correct_positive / n_positive_samples
+        train_specificity = correct_negative / n_negative_samples
 
         # Validating
+        tqdm.write("Validating")
         with torch.no_grad():
             model.eval()
             val_loss = 0
             correct_classifications = 0
-            for batch_idx, (x, y) in tqdm(enumerate(val_data, 1), desc="Validating", disable=not config.progress_bar):
+            n_positive_samples = 0
+            n_negative_samples = 0
+            correct_positive = 0
+            correct_negative = 0
+            for batch_idx, (x, y) in enumerate(val_data, 1):
                 x = x.to(device)
                 y = y.to(device)
                 with torch.cuda.amp.autocast():
                     output = model(x).to(device)
-                    pred = output >= 0.5
-                    correct_classifications += pred.eq(y).sum().item()
                     loss = loss_function(output, y).to(device)
+                pred = output >= 0.5
+                correct_classifications += pred.eq(y).sum().item()
+                n_positive_samples += y.sum()
+                n_negative_samples += (1-y).sum()
+                correct_positive += pred.eq(y).logical_and(y).sum().item()
+                correct_negative += pred.eq(y).logical_and(1-y).sum().item()
                 val_loss += loss.item()
                 if config.verbose:
                     n_samples = batch_idx * config.batch_size
                     cur_val_loss = val_loss / batch_idx
                     cur_val_acc = correct_classifications / n_samples
+                    current_sensitivity = correct_positive / n_positive_samples
+                    current_specificity = correct_negative / n_negative_samples
                     tqdm.write(
-                            f"Validating batch {batch_idx}/{len(val_data)} Current loss: {cur_val_loss:.4f} Current accuracy: {cur_val_acc:.4f}"
+                            f"Validating batch {batch_idx}/{len(val_data)} Current loss: {cur_val_loss:.4f} Current accuracy: {cur_val_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
                     )
             val_loss = val_loss / len(val_data)
             val_acc = correct_classifications / len(val_data.dataset)
+            val_specificty = correct_positive / n_positive_samples
+            val_sensitivity = correct_negative / n_negative_samples
 
         # Logging
         loss_log["train_loss"] = train_loss
         loss_log["train_acc"] = train_acc
+        loss_log["train_spec"] = train_specificity
+        loss_los["train_sens"] = train_sensitivity
         loss_log["val_loss"] = val_loss
         loss_log["val_acc"] = val_acc
+        loss_log["val_spec"] = val_specificty
+        loss_log["val_sens"] = val_sensitivity
 
         tqdm.write(
-            f"Epoch: {epoch} Training loss: {train_loss:.4f} Training accuracy: {train_acc:.4f} Validation loss: {val_loss:.4f} Validation accuracy: {val_acc:.4f}"
+            f"Epoch: {epoch} Training loss: {train_loss:.4f} Training accuracy: {train_acc:.4f} Training sensitivty: {train_sensitivity:.4f} Training specificity: {train_specificity:.4f} Validation loss: {val_loss:.4f} Validation accuracy: {val_acc:.4f} Validation sensitivity: {val_sensitivity:.4f} Validation specificity: {val_specificty:.4f}"
         )
 
         if config.use_tensorboard:
@@ -184,7 +217,7 @@ if __name__ == "__main__":
 
     # Training configuration.
     parser.add_argument("--in_memory", action="store_true", help="Store dataset in RAM")
-    parser.add_argument("--dataset", type=str, default="PCam", choices=["PCam"])
+    parser.add_argument("--dataset", type=str, default="PCam", choices=["PCam", "CelebA"])
     parser.add_argument("--batch_size", type=int, default=16, help="mini-batch size")
     parser.add_argument(
         "--epochs", type=int, default=200000, help="number of total epochs for training"
@@ -196,13 +229,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--beta2", type=float, default=0.999, help="beta2 for Adam optimizer"
     )
-    parser.add_argument("--use_early_stopping", type=str2bool, default=True)
+    parser.add_argument("--use_early_stopping", action="store_true", default=True)
     parser.add_argument(
         "--patience",
         type=int,
         default=3,
         help="patience for early stopping measured in validation loss tracking",
     )
+    parser.add_argument('--selected_attrs', '--list', nargs='+', help='selected attributes for the CelebA dataset', default=None)    
+    parser.add_argument("--attr_path", type=str, default=None)
 
     # Miscellaneous.
     parser.add_argument("--num_workers", type=int, default=1)
