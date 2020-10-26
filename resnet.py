@@ -54,7 +54,7 @@ def train_resnet(config):
         "train",
         config.num_workers,
         config.in_memory,
-        weighted=True,
+        weighted=config.dataset == "CelebA",
     )
     val_data = get_loader(
         config.image_dir,
@@ -67,7 +67,7 @@ def train_resnet(config):
         "val",
         config.num_workers,
         config.in_memory,
-        weighted=True,
+        weighted=config.dataset == "CelebA",
     )
 
     loss_function = nn.BCEWithLogitsLoss() 
@@ -186,7 +186,7 @@ def train_resnet(config):
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 tests_since_best = 0
-                best_model_save_path = os.path.join(config.model_save_dir, "pcam_resnet_best.ckpt")
+                best_model_save_path = os.path.join(config.model_save_dir, f"{config.dataset}_resnet_best.ckpt")
                 torch.save(model.state_dict(), best_model_save_path)
             else:
                 tests_since_best += 1
@@ -195,7 +195,7 @@ def train_resnet(config):
                         f"Reached early stopping threshold with patience {config.patience}."
                     )
                     break
-    model_save_path = os.path.join(config.model_save_dir, "pcam_resnet.ckpt")
+    model_save_path = os.path.join(config.model_save_dir, f"{config.dataset}_resnet.ckpt")
     torch.save(model.state_dict(), model_save_path)
     print(f"Saved model into path {model_save_path}")
 
