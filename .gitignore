@@ -1,6 +1,14 @@
 data/*
 celeba/*
 pcam/*
+*.ckpt
+*/samples/*
+*/logs
+# Tensorboard logs
+*.tfevents.*
+# Numpy fid stats
+*.npz
+*.zip
 .vscode
 
 # Created by https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,pycharm,windows,linux,macos
@@ -327,5 +335,3 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,pycharm,windows,linux,macos
-
-pretrained_models/
