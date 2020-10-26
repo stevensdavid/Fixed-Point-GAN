@@ -54,6 +54,7 @@ def train_resnet(config):
         "train",
         config.num_workers,
         config.in_memory,
+        weighted=True,
     )
     val_data = get_loader(
         config.image_dir,
@@ -66,6 +67,7 @@ def train_resnet(config):
         "val",
         config.num_workers,
         config.in_memory,
+        weighted=True,
     )
 
     loss_function = nn.BCEWithLogitsLoss() 
@@ -98,8 +100,6 @@ def train_resnet(config):
             y = y.to(device)
             with torch.cuda.amp.autocast():
                 output = model(x).to(device)
-                # class_pred = output >= 0.5
-                # correct_classifications += class_pred.eq(y).sum()
                 loss = loss_function(output, y).to(device)
             scaler.scale(loss).backward()
             scaler.step(optimizer)

@@ -1,4 +1,5 @@
 from torch.utils import data
+from torch.utils.data.sampler import WeightedRandomSampler
 from torchvision import transforms as T
 from torchvision.datasets import ImageFolder
 from PIL import Image
@@ -58,6 +59,12 @@ class CelebA(data.Dataset):
                 self.train_dataset.append([filename, label])
 
         print('Finished preprocessing the CelebA dataset...')
+
+    def get_labels(self):
+        """Return all labels"""
+        dataset = self.train_dataset if self.mode == "train" else self.test_dataset
+        labels = np.asarray([y for _, y in dataset], dtype=int)
+        return labels.flatten()
 
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
@@ -175,6 +182,11 @@ class PCam(data.Dataset):
         # self.y = h5py.File(os.path.join(self.image_dir, y_file), 'r', swmr=True)['y']
         print('Finished loading the PCam dataset...')
 
+    def get_labels(self):
+        """Return all labels"""
+        y = h5py.File(self.y, 'r', swmr=True)['y']
+        return y.flatten()
+
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
         if self.preloaded:
@@ -192,7 +204,7 @@ class PCam(data.Dataset):
 
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
-               batch_size=16, dataset='CelebA', mode='train', num_workers=1, in_memory=False):
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1, in_memory=False, weighted=False):
     """Build and return a data loader."""
     transform = []
     if mode == 'train':
@@ -212,11 +224,23 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     
     elif dataset == 'Directory':
         dataset = ImageFolder(image_dir, transform)
-
+    if weighted:
+        labels = dataset.get_labels()
+        # invert prevalence to sample evenly
+        class_weights = 1 / np.asarray([np.sum(labels == 0)/len(labels), np.sum(labels == 1)/len(labels)])
+        sample_weights = class_weights[labels]
+        sampler = WeightedRandomSampler(
+            weights=sample_weights,
+            num_samples=len(sample_weights),
+            replacement=True
+        )
+    else:
+        sampler = None
     data_loader = data.DataLoader(dataset=dataset,
-                                  batch_size=batch_size,
-                                  shuffle=(mode=='train'),
-                                  num_workers=num_workers)
+                                batch_size=batch_size,
+                                shuffle=(mode=='train' and sampler is None),
+                                num_workers=num_workers,
+                                sampler=sampler)
     return data_loader
 
 if __name__ == "__main__":
