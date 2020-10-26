@@ -9,6 +9,7 @@ import h5py
 from PIL import Image
 from argparse import ArgumentParser
 import sys
+import data_loader as dl
 
 parser = ArgumentParser()
 parser.add_argument("--dataset", type=str, default="PCam", choices=["CelebA", "PCam"])
@@ -36,7 +37,9 @@ if config.dataset == "CelebA":
     data_path = "data/celeba/images"
 
     # list of paths
-    image_list = glob.glob(os.path.join(data_path, f'*.{config.image_format}'))
+    # image_list = glob.glob(os.path.join(data_path, f'*.{config.image_format}'))
+    # NOTE: EYEGLASSES IS HARD CODED; CHANGE TO TAKE ARGPARSE LIST OF SELECTED_ATTRIBS
+    image_list = dl.get_loader(data_path, 'data/celeba/list_attr_celeba.txt', ['Eyeglasses'], batch_size=100, all_data=True, mode='test', normalize=False)
     # print(imread(str(image_list[10])).astype(np.float32))
     # exit(0)
     # images = np.array([imread(str(fn)).astype(np.float32) for fn in image_list])
@@ -63,7 +66,7 @@ print("calculte FID stats..", end=" ", flush=True)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     if config.dataset == "CelebA":
-      mu, sigma = fid.calculate_activation_statistics_from_files(image_list, sess, batch_size=100)
+      mu, sigma = fid.calculate_activation_statistics(image_list, sess, batch_size=100)
     elif config.dataset == "PCam":
       mu, sigma = fid.calculate_activation_statistics(image_list, sess, batch_size=100)
     np.savez_compressed(output_path, mu=mu, sigma=sigma)

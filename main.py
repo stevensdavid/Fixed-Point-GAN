@@ -101,6 +101,7 @@ if __name__ == '__main__':
     parser.add_argument('--exclude_source', dest="include_source", action="store_false", help='exclude column containing source image from output')
     parser.add_argument('--single_image_output', default=False, dest="single_image_output", action="store_true", help='output one image for each input image, regardless of batch size used by data loader (default: False)')
     parser.add_argument('--random_target', type=float, default=None, help='select target domain 1 with the specified probability \'p\', and select the other target domain (0) with probability \'1-p\'. Only supported for PCam and CelebA. Assumes binary label for target domain (default: None -- this always chooses the opposite label)')
+    parser.add_argument('--random_target_class', type=str, default=None, help='Choose the attribute to which to apply the random target domain, e.g Eyeglasses. Undefined behavior if used on hair colors.')
     parser.add_argument('--all_data', default=False, dest="all_data", action="store_true", help='Use both the training and test data during testing. Only works for the CelebA dataset -- ignored for other datasets. Default: False')
     
     # Miscellaneous.

@@ -56,6 +56,7 @@ class Solver(object):
           self.include_source = False
 
         self.random_target = config.random_target
+        self.random_target_class = config.random_target_class
 
         # Miscellaneous.
         self.use_tensorboard = config.use_tensorboard
@@ -186,7 +187,9 @@ class Solver(object):
                         if j != i:
                             c_trg[:, j] = 0
                 else:
-                    if c_dim == 1 and self.random_target is not None:
+                    # only do if dataset.attr2idx(random_target_class) == i 
+                    # AND random_target is not None.
+                    if self.random_target_class is not None and self.data_loader.dataset.label_attr2idx[self.random_target_class] == i and self.random_target is not None:
                       # for each element in batch, choose random outcome between 0 and 1.
                       # c_dim == 1 means "i" is the only attribute, i.e only column.
                       # we only do this when we have 1 attribute; when multiple attributes 

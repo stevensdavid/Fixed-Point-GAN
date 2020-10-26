@@ -27,6 +27,7 @@ import pathlib
 import urllib
 from tqdm import tqdm
 import warnings
+from torch.utils import data
 
 class InvalidFIDException(Exception):
     pass
@@ -82,13 +83,36 @@ def get_activations(images, sess, batch_size=50, verbose=False):
        activations of the given tensor when feeding inception with the query tensor.
     """
     inception_layer = _get_inception_layer(sess)
-    n_images = images.shape[0]
+    
+    if isinstance(images, data.DataLoader): 
+      n_images = len(images.dataset)
+      batch_size = images.batch_size
+      print(batch_size)
+    else:
+      n_images = images.shape[0]
+
     if batch_size > n_images:
         print("warning: batch size is bigger than the data size. setting batch size to data size")
         batch_size = n_images
-    n_batches = n_images//batch_size # drops the last batch if < batch_size
+    n_batches = n_images//batch_size + 1 # drops the last batch if < batch_size
     pred_arr = np.empty((n_batches * batch_size,2048))
-    for i in tqdm(range(n_batches), desc="Calculating FID activations"):
+    if isinstance(images, data.DataLoader):
+      for i, (x, y) in tqdm(enumerate(images), desc="Calculating FID activations", total=len(images)):
+        if verbose:
+            print("\rPropagating batch %d/%d" % (i+1, n_batches), end="", flush=True)
+        start = i*batch_size
+        
+        if start+batch_size < n_images:
+            end = start+batch_size
+        else:
+            end = n_images
+
+        batch = x.permute(0,2,3,1)
+        print(batch.shape)
+        pred = sess.run(inception_layer, {'FID_Inception_Net/ExpandDims:0': batch})
+        pred_arr[start:end] = pred.reshape(batch.shape[0],-1)
+    else:
+      for i in tqdm(range(n_batches), desc="Calculating FID activations"):
         if verbose:
             print("\rPropagating batch %d/%d" % (i+1, n_batches), end="", flush=True)
         start = i*batch_size
@@ -109,6 +133,7 @@ def get_activations(images, sess, batch_size=50, verbose=False):
         batch = images[start:end].astype(np.float32)
         pred = sess.run(inception_layer, {'FID_Inception_Net/ExpandDims:0': batch})
         pred_arr[start:end] = pred.reshape(batch.shape[0],-1)
+    
     if verbose:
         print(" done")
     return pred_arr
