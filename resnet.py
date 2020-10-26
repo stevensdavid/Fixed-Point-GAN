@@ -3,7 +3,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import torch
-from torchvision.models import resnet152
+from torchvision.models.resnet import resnet50
 from data_loader import get_loader
 from argparse import ArgumentParser
 from main import str2bool
@@ -18,7 +18,8 @@ import os
 class ResNet(nn.Module):
     def __init__(self, num_classes):
         super().__init__()
-        self.model = resnet152(pretrained=False, num_classes=num_classes)
+        self.model = resnet50(pretrained=True)
+        self.model.fc = nn.Linear(2048, num_classes)
         self.activation = nn.Sigmoid()
         # self.activation = nn.Identity()
         # Make AVG pooling input shape independent
