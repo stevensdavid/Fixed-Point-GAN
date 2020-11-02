@@ -2,6 +2,9 @@ from model import Generator
 from model import Discriminator
 from torch.autograd import Variable
 from torchvision.utils import save_image
+from torchvision import transforms
+from torchvision.models import resnet50
+from matplotlib import colors
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -10,7 +13,29 @@ import time
 import datetime
 from tqdm import tqdm
 from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+from cv2 import cv2
+from PIL import Image
+import torch.nn as nn
+from sklearn import metrics
 
+class ResNet(nn.Module):
+    def __init__(self, num_classes):
+        super().__init__()
+        self.model = resnet50(pretrained=True)
+        self.model.fc = nn.Linear(2048, num_classes)
+        self.activation = nn.Sigmoid()
+        # self.activation = nn.Identity()
+        # Make AVG pooling input shape independent
+        self.model.avgpool = nn.AdaptiveAvgPool2d(1)
+
+    def forward(self, x):
+        x = self.model(x)
+        return self.activation(x)
+
+    def predict(self, x):
+        x = self.forward(x)
+        return self.activation(x)
 
 class Solver(object):
     """Solver for training and testing Fixed-Point GAN."""
@@ -62,6 +87,8 @@ class Solver(object):
         self.use_tensorboard = config.use_tensorboard
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+        print("device", self.device)
+
         # Directories.
         self.log_dir = config.log_dir
         self.sample_dir = config.sample_dir
@@ -76,6 +103,7 @@ class Solver(object):
 
         # Build the model and tensorboard.
         self.build_model()
+
         if self.use_tensorboard:
             self.build_tensorboard()
 
@@ -109,9 +137,18 @@ class Solver(object):
         num_params = 0
         for p in model.parameters():
             num_params += p.numel()
-        print(model)
+        #print(model)
         print(name)
         print("The number of parameters: {}".format(num_params))
+
+
+    def restore_model_resnet(self, name = 'celeba_resnet.ckpt'):
+        print('Loading the resenet model')
+        res_path = os.path.join(self.model_save_dir, name)
+        print(res_path)
+        self.resnet = ResNet(num_classes=1)
+        self.resnet.load_state_dict(torch.load(res_path),strict=False)
+        self.resnet.eval()
 
     def restore_model(self, resume_iters):
         """Restore the trained generator and discriminator."""
@@ -142,6 +179,47 @@ class Solver(object):
         """Convert the range from [-1, 1] to [0, 1]."""
         out = (x + 1) / 2
         return out.clamp_(0, 1)
+
+    def norm(self, x):
+        """Convert the range from [-1, 1] to [0, 1]."""
+        out = x - 0.5
+        return out.clamp_(-0.5, 5)
+
+
+    def confusion_metrics (self, conf_matrix):
+        
+        # save confusion matrix and slice into four pieces    
+        TP = conf_matrix[1][1]
+        TN = conf_matrix[0][0]
+        FP = conf_matrix[0][1]
+        FN = conf_matrix[1][0]   
+
+        print('True Positives:', TP)
+        print('True Negatives:', TN)
+        print('False Positives:', FP)
+        print('False Negatives:', FN)
+        
+        # calculate accuracy
+        conf_accuracy = (float (TP+TN) / float(TP + TN + FP + FN))
+        
+        # calculate mis-classification
+        conf_misclassification = 1- conf_accuracy
+        
+        # calculate the sensitivity
+        conf_sensitivity = (TP / float(TP + FN))    # calculate the specificity
+        conf_specificity = (TN / float(TN + FP))
+        
+        # calculate precision
+        conf_precision = (TN / float(TN + FP))    # calculate f_1 score
+        conf_f1 = 2 * ((conf_precision * conf_sensitivity) / (conf_precision + conf_sensitivity))    
+
+        print('-'*50)
+        print(f'Accuracy: {round(conf_accuracy,2)}') 
+        print(f'Mis-Classification: {round(conf_misclassification,2)}') 
+        print(f'Sensitivity: {round(conf_sensitivity,2)}') 
+        print(f'Specificity: {round(conf_specificity,2)}') 
+        print(f'Precision: {round(conf_precision,2)}')
+        print(f'f_1 Score: {round(conf_f1,2)}')    
 
     def gradient_penalty(self, y, x):
         """Compute gradient penalty: (L2_norm(dy/dx) - 1)**2."""
@@ -502,3 +580,460 @@ class Solver(object):
                 result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
                 save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
                 print('Saved real and fake images into {}...'.format(result_path))
+
+
+    def test_pcam(self):
+
+        """Translate images using Fixed-Point GAN trained on a single dataset."""
+        # Load the trained generator.
+        self.restore_model(self.test_iters)
+        
+        # Set data loader.
+        if self.dataset in ['PCam', 'CelebA']:
+            data_loader = self.data_loader
+
+        with torch.no_grad():
+            for i, (x_real, c_org) in enumerate(data_loader):
+                x_real = x_real.to(self.device)
+
+                c_trg = c_org.clone()
+                #c_trg[:, 0] = 0 # always to healthy
+
+                c_trg_list = [c_trg.to(self.device)]
+              
+              
+                # Translate images.
+                x_fake_list = [x_real]
+                for c_trg in c_trg_list:
+                    
+                    
+                    # settings
+                    h, w = 0, 0        # for raster image
+                    nrows, ncols = 32, 6  # array of sub-plots
+
+
+                    my_dpi = 96
+             
+                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(646/my_dpi, 3456/my_dpi), dpi=my_dpi)
+
+                    def heatmap(img):
+                        img = np.array(img) 
+                        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                        return gray_img
+
+                    c_trg_tilde = (~c_trg.bool()).float()
+                    for index, c in enumerate(c_trg):
+                        # Save generated Tilde image
+
+                        c = c.bool()
+                        c_tilde = ~c
+
+                        c = int(c.item())
+                        c_tilde = int(c_tilde.item())
+
+                        input_image = self.denorm(x_real[index].data.cpu())
+
+                        delta = self.G(x_real, c_trg)
+                        generated_correct_class_image = torch.tanh(delta[index] + x_real[index])
+                        generated_correct_class_image = self.denorm(generated_correct_class_image.data.cpu())
+
+                        delta_tilde = self.G(x_real, c_trg_tilde)
+                        generated_tilde_class_image = torch.tanh(delta_tilde[index] + x_real[index])
+                        generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
+
+                        difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
+                        difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
+                        difference_generated_image = np.abs(generated_correct_class_image - generated_tilde_class_image)
+
+                        axi = ax.flat
+
+                        ax_col_one = axi[index * ncols]
+                        ax_col_two = axi[index * ncols+1]
+                        ax_col_three = axi[index * ncols+2]
+                        ax_col_four = axi[index * ncols+3]
+                        ax_col_five = axi[index * ncols+4]
+                        ax_col_six = axi[index * ncols+5]
+
+                        input_image = transforms.ToPILImage()(input_image).convert("RGB")
+                        generated_correct_class_image = transforms.ToPILImage()(generated_correct_class_image).convert("RGB")
+                        generated_tilde_class_image = transforms.ToPILImage()(generated_tilde_class_image).convert("RGB")
+                        difference_real_generated_image = transforms.ToPILImage()(difference_real_generated_image).convert("RGB")
+                        difference_real_generated_tilde_image = transforms.ToPILImage()(difference_real_generated_tilde_image).convert("RGB")
+                        difference_generated_image = transforms.ToPILImage()(difference_generated_image).convert("RGB")
+
+                        ax_col_one.imshow(input_image, aspect='equal')
+                        ax_col_two.imshow(generated_correct_class_image, aspect='equal')
+                        ax_col_three.imshow(generated_tilde_class_image, aspect='equal')
+                        ax_col_four.imshow(heatmap(difference_real_generated_image), aspect='equal', cmap='jet')
+                        ax_col_five.imshow(heatmap(difference_real_generated_tilde_image), aspect='equal', cmap='jet')
+                        ax_col_six.imshow(heatmap(difference_generated_image), aspect='equal', cmap='jet')
+
+                        ax_col_one.text(4,10, c, color='white', va="center", backgroundcolor='black')
+                        #ax_col_two.text(4,15,'G({})'.format(c), color='white', backgroundcolor='black')
+                        #ax_col_three.text(4,15,'G({})'.format(c_tilde), color='white', backgroundcolor='black')
+                        #ax_col_four.text(4,15,'{}-G({})'.format(c, c), color='black', backgroundcolor='white')
+                        #ax_col_five.text(4,15,'{}-G({})'.format(c, c_tilde), color='black', backgroundcolor='white')
+                        #ax_col_six.text(4,15,'G({})-G({})'.format(c, c_tilde), color='black', backgroundcolor='white')
+
+                        ax_col_one.set_axis_off()
+                        ax_col_two.set_axis_off()
+                        ax_col_three.set_axis_off()
+                        ax_col_four.set_axis_off()
+                        ax_col_five.set_axis_off()
+                        ax_col_six.set_axis_off()
+
+                        result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c))
+                        if not os.path.exists(result_generated_path):
+                            os.makedirs(result_generated_path)  
+
+                        result_generated_path = os.path.join(result_generated_path, '{}_{}-images.jpg'.format(i+1, index+1))
+    
+                        #save_image(self.denorm((torch.tanh(delta[index] + x_real[index])).data.cpu()), result_generated_path, nrow=1, padding=0)
+
+                    plt.tight_layout(True)
+                    plt.gca().set_axis_off()
+                    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, 
+                                hspace = 0, wspace = 0)
+                    plt.margins(0,0)
+                    result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                    plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
+                    plt.clf()
+                    #plt.show()
+                    
+
+                # Save the translated images.
+               # x_concat = torch.cat(x_fake_list, dim=3)
+                #result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+               # save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=1)
+                #print('Saved real and fake images into {}...'.format(result_path))
+            
+
+
+    def test_celeba(self):
+
+        """Translate images using Fixed-Point GAN trained on a single dataset."""
+        # Load the trained generator.
+        self.restore_model(self.test_iters)
+        self.restore_model_resnet('celeba_resnet.ckpt')
+
+        # Set data loader.
+        if self.dataset in ['PCam', 'CelebA']:
+            data_loader = self.data_loader
+
+        y_test = torch.zeros(0)
+        y_pred = torch.zeros(0)    
+        
+        with torch.no_grad():
+            for i, (x_real, c_org) in enumerate(data_loader):
+                x_real = x_real.to(self.device)
+                x_real_tilde = x_real.clone()
+                x_real_tilde = x_real_tilde.to(self.device)
+                c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
+
+                c_trg = c_org.clone()
+                #c_trg[:, 0] = 0 # always to healthy
+                
+              
+              
+                # Translate images.
+                x_fake_list = [x_real]
+                for c_trg in c_trg_list:
+                                        
+                    # settings
+                    h, w = 0, 0        # for raster image
+                    nrows, ncols = len(c_trg), 9  # array of sub-plots
+
+
+                    my_dpi = 96
+             
+                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(972/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
+
+                    def get_grey_image(image):
+                        image = np.array(image) 
+                        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                        return gray_image
+
+                                                
+                    def get_prediction_image(image, v):
+                        image = np.array(image) 
+                        # Fill image with color
+                        if v == 1:
+                            image[:] = (0, 200, 0)
+                        else:
+                            image[:] = (200, 0, 0)
+                        return image
+
+                    c_trg_tilde = (~c_trg.bool()).float()
+                    for index, c in enumerate(c_trg):
+                        # Save generated Tilde image
+
+                        c = c.bool()
+                        c_tilde = ~c
+
+                        c = int(c.item())
+                        c_tilde = int(c_tilde.item())
+
+                        input_image = self.denorm(x_real[index].data.cpu())
+
+                        delta = self.G(x_real, c_trg)
+                        generated_correct_class_image = torch.tanh(delta[index] + x_real[index])
+                        generated_correct_class_image = self.denorm(generated_correct_class_image.data.cpu())
+
+                        delta_tilde = self.G(x_real, c_trg_tilde)
+                        generated_tilde_class_image = torch.tanh(delta_tilde[index] + x_real[index])
+                        generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
+
+                        x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
+
+                        difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
+                        difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
+                        difference_generated_image = np.abs(generated_correct_class_image - generated_tilde_class_image)
+
+                        axi = ax.flat
+
+                        ax_col_one = axi[index * ncols]
+                        ax_col_two = axi[index * ncols+1]
+                        ax_col_three = axi[index * ncols+2]
+                        ax_col_four = axi[index * ncols+3]
+                        ax_col_five = axi[index * ncols+4]
+                        ax_col_six = axi[index * ncols+5]
+                        ax_col_seven = axi[index * ncols+6]       
+                        ax_col_eight = axi[index * ncols+7]
+
+                        input_image = transforms.ToPILImage()(input_image).convert("RGB")
+                        generated_correct_class_image = transforms.ToPILImage()(generated_correct_class_image).convert("RGB")
+                        generated_tilde_class_image = transforms.ToPILImage()(generated_tilde_class_image).convert("RGB")
+                        difference_real_generated_image = transforms.ToPILImage()(difference_real_generated_image).convert("RGB")
+                        difference_real_generated_tilde_image = transforms.ToPILImage()(difference_real_generated_tilde_image).convert("RGB")
+                        difference_generated_image = transforms.ToPILImage()(difference_generated_image).convert("RGB")
+
+                        ax_col_one.imshow(input_image, aspect='equal')
+                        ax_col_two.imshow(generated_correct_class_image, aspect='equal')
+                        ax_col_three.imshow(generated_tilde_class_image, aspect='equal')
+                        ax_col_four.imshow(get_grey_image(difference_real_generated_image), aspect='equal', cmap='jet')
+                        ax_col_five.imshow(get_grey_image(difference_real_generated_tilde_image), aspect='equal', cmap='jet')
+                        ax_col_six.imshow(get_grey_image(difference_generated_image), aspect='equal', cmap='jet')
+                        ax_col_seven.imshow(difference_real_generated_image, aspect='equal')
+                        ax_col_eight.imshow(difference_real_generated_tilde_image, aspect='equal')
+
+                        ax_col_one.text(4,5, c, color='white', va="center", backgroundcolor='black')
+
+                        ax_col_one.set_axis_off()
+                        ax_col_two.set_axis_off()
+                        ax_col_three.set_axis_off()
+                        ax_col_four.set_axis_off()
+                        ax_col_five.set_axis_off()
+                        ax_col_six.set_axis_off()
+                        ax_col_seven.set_axis_off()
+                        ax_col_eight.set_axis_off()
+
+                        result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
+                        if not os.path.exists(result_generated_path):
+                            os.makedirs(result_generated_path)  
+
+                        result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
+                        generated_tilde_class_image.save(result_generated_path) 
+                        #save_image(self.denorm(torch.tanh(delta_tilde[index] + x_real[index]).data.cpu()), result_generated_path, nrow=1, padding=0)
+
+                    resnet_output = self.resnet(x_real_tilde.to("cpu")).to(self.device)
+                    predictions = resnet_output >= 0.5
+                    abs_diff = abs(predictions.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
+                    for index, c in enumerate(c_trg[:, 0]):
+                        axi = ax.flat      
+                        ax_col_nine = axi[index * ncols+8]
+                        if abs_diff[index].item() == 1:
+                            ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                        else:
+                            ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                        ax_col_nine.set_axis_off()
+
+                    y_test = torch.cat([y_test, c_trg[:, :1].to("cpu").int()], 0)
+                    y_pred = torch.cat([y_pred, predictions.to("cpu").int()], 0)
+                    cm = metrics.confusion_matrix(y_test, y_pred)
+                    self.confusion_metrics(cm)                    
+                    print('Saving image {}'.format(i+1))
+                    plt.tight_layout(True)
+                    plt.gca().set_axis_off()
+                    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
+                    plt.margins(0,0)
+                    result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                    plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
+                    plt.close()
+                    # plt.show()
+
+
+    def test_celeba2(self):
+
+            """Translate images using Fixed-Point GAN trained on a single dataset."""
+            # Load the trained generator.
+            self.restore_model(self.test_iters)
+
+            self.restore_model_resnet('celeba_resnet.ckpt')
+            
+            # Set data loader.
+            if self.dataset in ['PCam', 'CelebA']:
+                data_loader = self.data_loader  
+
+            y_test = torch.zeros(0)
+            y_pred = torch.zeros(0)
+
+            with torch.no_grad():
+                for i, (x_real, c_org) in enumerate(data_loader):
+                    x_real_tilde = x_real.clone()
+                    x_real_tilde = x_real_tilde.to(self.device)
+                    x_real = x_real.to(self.device)
+                    c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
+
+              
+                    #print(pred)
+
+                    # Translate images.
+                    x_fake_list = [x_real]
+                    for c_index, c_trg in enumerate(c_trg_list):
+                        
+                
+                        if c_index is not 0:
+                            continue
+
+                        #c_trg = c_trg[:,0]
+                                    
+                        # settings
+                        h, w = 0, 0        # for raster image
+                        nrows, ncols = len(c_trg), 9  # array of sub-plots
+
+                        #print(len(c_trg))
+
+                        my_dpi = 96
+                
+                        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(970/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
+
+                        def get_grey_image(image):
+                            image = np.array(image) 
+                            gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                            return gray_image
+
+                        def get_prediction_image(image, v):
+                            image = np.array(image) 
+                            # Fill image with color
+                            if v == 1:
+                                image[:] = (0, 200, 0)
+                            else:
+                                image[:] = (200, 0, 0)
+
+                            return image    
+
+                        # Tilde everything
+                        #c_trg_tilde = (~c_trg.bool()).float()
+
+
+                        # Tilde glasses only.
+                        c_trg_tilde = c_trg.clone()
+                        for c_trg_index, c_trg_t in enumerate(c_trg_tilde):
+                            for c_trg_index2, c_trg_2 in enumerate(c_trg_t):
+                                if c_trg_index2 == 0:
+                                    c_trg_tilde[c_trg_index][c_trg_index2] = (~c_trg_2.bool()).float()
+
+
+                        #print(c_trg - c_trg_tilde)
+                        #print(c_trg_tilde)
+
+                        for index, c in enumerate(c_trg[:, 0]):
+                            # Save generated Tilde image
+
+                            input_image = self.denorm(x_real[index].data.cpu())
+
+                            delta = self.G(x_real, c_trg)
+                            
+                            delta_tilde = self.G(x_real, c_trg_tilde)
+
+                            c = c.bool()
+                            c_tilde = ~c
+
+                            c = int(c.item())
+                            c_tilde = int(c_tilde.item())
+
+                            generated_correct_class_image = torch.tanh(delta[index] + x_real[index])
+                            generated_correct_class_image = self.denorm(generated_correct_class_image.data.cpu())
+
+                            generated_tilde_class_image = torch.tanh(delta_tilde[index] + x_real[index])
+                            generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
+
+                            x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
+                            
+                            difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
+                            difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
+                            difference_generated_image = np.abs(generated_correct_class_image - generated_tilde_class_image)
+
+                            axi = ax.flat
+
+                            ax_col_one = axi[index * ncols]
+                            ax_col_two = axi[index * ncols+1]
+                            ax_col_three = axi[index * ncols+2]
+                            ax_col_four = axi[index * ncols+3]
+                            ax_col_five = axi[index * ncols+4]
+                            ax_col_six = axi[index * ncols+5]
+                            ax_col_seven = axi[index * ncols+6]       
+                            ax_col_eight = axi[index * ncols+7]
+
+                            input_image = transforms.ToPILImage()(input_image).convert("RGB")
+                            generated_correct_class_image = transforms.ToPILImage()(generated_correct_class_image).convert("RGB")
+                            generated_tilde_class_image = transforms.ToPILImage()(generated_tilde_class_image).convert("RGB")
+                            
+                            difference_real_generated_image = transforms.ToPILImage()(difference_real_generated_image).convert("RGB")
+                            difference_real_generated_tilde_image = transforms.ToPILImage()(difference_real_generated_tilde_image).convert("RGB")
+                            difference_generated_image = transforms.ToPILImage()(difference_generated_image).convert("RGB")
+
+                            ax_col_one.imshow(input_image, aspect='equal')
+                            ax_col_two.imshow(generated_correct_class_image, aspect='equal')
+                            ax_col_three.imshow(generated_tilde_class_image, aspect='equal')
+                            ax_col_four.imshow(get_grey_image(difference_real_generated_image), aspect='equal', cmap='jet')
+                            ax_col_five.imshow(get_grey_image(difference_real_generated_tilde_image), aspect='equal', cmap='jet')
+                            ax_col_six.imshow(get_grey_image(difference_generated_image), aspect='equal', cmap='jet')
+                            ax_col_seven.imshow(difference_real_generated_image, aspect='equal')
+                            ax_col_eight.imshow(difference_real_generated_tilde_image, aspect='equal')
+
+                            ax_col_one.text(4,5, c, color='white', va="center", backgroundcolor='black')
+
+                            ax_col_one.set_axis_off()
+                            ax_col_two.set_axis_off()
+                            ax_col_three.set_axis_off()
+                            ax_col_four.set_axis_off()
+                            ax_col_five.set_axis_off()
+                            ax_col_six.set_axis_off()
+                            ax_col_seven.set_axis_off()
+                            ax_col_eight.set_axis_off()
+
+                            result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
+                            if not os.path.exists(result_generated_path):
+                                os.makedirs(result_generated_path)  
+
+                            result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
+                            generated_tilde_class_image.save(result_generated_path) 
+                            #save_image(self.denorm(torch.tanh(delta_tilde[index] + x_real[index]).data.cpu()), result_generated_path, nrow=1, padding=0)
+
+        
+                        resnet_output = self.resnet(x_real_tilde.to("cpu")).to(self.device)
+                        predictions = resnet_output >= 0.5
+                        abs_diff = abs(predictions.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
+                        for index, c in enumerate(c_trg[:, 0]):
+                            axi = ax.flat      
+                            ax_col_nine = axi[index * ncols+8]
+                            if abs_diff[index].item() == 1:
+                                ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                            else:
+                                ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                            ax_col_nine.set_axis_off()
+                        y_test = torch.cat([y_test, c_trg[:, :1].to("cpu").int()], 0)
+                        y_pred = torch.cat([y_pred, predictions.to("cpu").int()], 0)
+                        cm = metrics.confusion_matrix(y_test, y_pred)
+                        self.confusion_metrics(cm)
+
+                        print('Saving image {}'.format(i+1))
+                        plt.tight_layout(True)
+                        plt.gca().set_axis_off()
+                        plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
+                        plt.margins(0,0)
+                        result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                        plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
+                        plt.close()
+                        # plt.show()                    
