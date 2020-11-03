@@ -63,8 +63,9 @@ class CelebA(data.Dataset):
     def get_labels(self):
         """Return all labels"""
         dataset = self.train_dataset if self.mode == "train" else self.test_dataset
-        labels = np.asarray([y for _, y in dataset], dtype=int)
-        return labels.flatten()
+        # Only use first attribute, which is assumed to be glasses.
+        labels = np.asarray([y[0] for _, y in dataset], dtype=int)
+        return labels
 
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
