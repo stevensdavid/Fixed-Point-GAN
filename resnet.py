@@ -1,4 +1,5 @@
 # Ignore futurewarnings from using old version of tensorboard
+from solver import Solver
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -14,6 +15,26 @@ from logger import Logger
 from tqdm import tqdm
 import os
 
+
+def add_missing_solver_args(config):
+    # Model configurations.
+    expected_attrs = [
+        "c_dim", "c2_dim", "image_size", "g_conv_dim", "d_conv_dim", "g_repeat_num",
+        "d_repeat_num", "lambda_cls", "lambda_rec", "lambda_gp", "lambda_id",
+        "dataset", "batch_size", "num_iters", "num_iters_decay", "g_lr", "d_lr",
+        "n_critic", "beta1", "beta2", "resume_iters", "selected_attrs", "test_iters",
+        "use_tensorboard", "log_dir", "sample_dir", "model_save_dir", "result_dir",
+        "log_step", "sample_step", "model_save_step", "lr_update_step"
+    ]
+    for attr in expected_attrs:
+        if not hasattr(config, attr):
+            setattr(config, attr, None)
+    # Set model hyperparameters to their defaults
+    config.d_conv_dim = 64
+    config.g_conv_dim = 64
+    config.g_repeat_num = 6
+    config.d_repeat_num = 6
+    return config
 
 class ResNet(nn.Module):
     def __init__(self, num_classes):
@@ -40,6 +61,7 @@ def train_resnet(config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cuda":
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    
     # device = "cpu"
 
     model = ResNet(num_classes=1)
@@ -70,6 +92,13 @@ def train_resnet(config):
         weighted=config.dataset == "CelebA",
     )
 
+    if config.generator_iters is not None:
+        config = add_missing_solver_args(config)
+        generator = Solver(train_data, config, train_mode=False)
+        generator.restore_model(config.generator_iters)
+    else:
+        generator = None
+
     loss_function = nn.BCEWithLogitsLoss() 
     optimizer = optim.Adam(
         model.parameters(), lr=config.lr, betas=[config.beta1, config.beta2]
@@ -94,6 +123,9 @@ def train_resnet(config):
         # Training
         tqdm.write("Training")
         for batch_idx, (x, y) in enumerate(train_data, 1):
+            if generator is not None:
+                x, y = generator.invert_batch(x, y)
+
             model.train()
             optimizer.zero_grad()
             x = x.to(device)
@@ -137,6 +169,8 @@ def train_resnet(config):
             correct_positive = 0
             correct_negative = 0
             for batch_idx, (x, y) in enumerate(val_data, 1):
+                if generator is not None:
+                    x, y = generator.invert_batch(x, y)
                 x = x.to(device)
                 y = y.to(device)
                 with torch.cuda.amp.autocast():
@@ -186,7 +220,7 @@ def train_resnet(config):
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 tests_since_best = 0
-                best_model_save_path = os.path.join(config.model_save_dir, f"{config.dataset}_resnet_best.ckpt")
+                best_model_save_path = os.path.join(config.resnet_save_dir, f"{config.dataset}_resnet_best.ckpt")
                 torch.save(model.state_dict(), best_model_save_path)
             else:
                 tests_since_best += 1
@@ -195,7 +229,7 @@ def train_resnet(config):
                         f"Reached early stopping threshold with patience {config.patience}."
                     )
                     break
-    model_save_path = os.path.join(config.model_save_dir, f"{config.dataset}_resnet.ckpt")
+    model_save_path = os.path.join(config.resnet_save_dir, f"{config.dataset}_resnet.ckpt")
     torch.save(model.state_dict(), model_save_path)
     print(f"Saved model into path {model_save_path}")
 
@@ -254,7 +288,19 @@ if __name__ == "__main__":
     # Directories.
     parser.add_argument("--image_dir", type=str, default="data/pcam")
     parser.add_argument("--log_dir", type=str, default="pcam/resnet/logs")
-    parser.add_argument("--model_save_dir", type=str, default="pcam/resnet/models")
+    parser.add_argument("--resnet_save_dir", type=str, default="pcam/resnet/models")
+    parser.add_argument(
+        "--model_save_dir", 
+        type=str, 
+        default="pcam/models", 
+        help="Directory where GAN models are saved"
+    )
+
+    parser.add_argument(
+        "--generator_iters",
+        type=int,
+        help="Train on generated data from a model restored form the supplied iteration."
+    )
 
     config = parser.parse_args()
     main(config)

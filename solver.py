@@ -14,7 +14,7 @@ from sklearn.cluster import KMeans
 class Solver(object):
     """Solver for training and testing Fixed-Point GAN."""
 
-    def __init__(self, data_loader, config):
+    def __init__(self, data_loader, config, train_mode=True):
         """Initialize configurations."""
 
         # Data loader.
@@ -64,7 +64,8 @@ class Solver(object):
         self.sample_step = config.sample_step
         self.model_save_step = config.model_save_step
         self.lr_update_step = config.lr_update_step
-
+        # Used to only load what is needed
+        self.train_mode = train_mode
         # Build the model and tensorboard.
         self.build_model()
         if self.use_tensorboard:
@@ -74,15 +75,15 @@ class Solver(object):
         """Create a generator and a discriminator."""
         if self.dataset in ['CelebA', 'BRATS', 'PCam', 'Directory']:
             self.G = Generator(self.g_conv_dim, self.c_dim, self.g_repeat_num)
+        if self.train_mode:
             self.D = Discriminator(self.image_size, self.d_conv_dim, self.c_dim, self.d_repeat_num) 
-
-        self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.g_lr, [self.beta1, self.beta2])
-        self.d_optimizer = torch.optim.Adam(self.D.parameters(), self.d_lr, [self.beta1, self.beta2])
-        self.print_network(self.G, 'G')
-        self.print_network(self.D, 'D')
+            self.g_optimizer = torch.optim.Adam(self.G.parameters(), self.g_lr, [self.beta1, self.beta2])
+            self.d_optimizer = torch.optim.Adam(self.D.parameters(), self.d_lr, [self.beta1, self.beta2])
+            self.print_network(self.G, 'G')
+            self.print_network(self.D, 'D')
+            self.D.to(self.device)
             
         self.G.to(self.device)
-        self.D.to(self.device)
 
     def recreate_image(self, codebook, labels, w, h):
         """Recreate the (compressed) image from the code book & labels"""
@@ -108,9 +109,10 @@ class Solver(object):
         """Restore the trained generator and discriminator."""
         print('Loading the trained models from step {}...'.format(resume_iters))
         G_path = os.path.join(self.model_save_dir, '{}-G.ckpt'.format(resume_iters))
-        D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(resume_iters))
         self.G.load_state_dict(torch.load(G_path, map_location=lambda storage, loc: storage))
-        self.D.load_state_dict(torch.load(D_path, map_location=lambda storage, loc: storage))
+        if self.train_mode:
+            D_path = os.path.join(self.model_save_dir, '{}-D.ckpt'.format(resume_iters))
+            self.D.load_state_dict(torch.load(D_path, map_location=lambda storage, loc: storage))
 
     def build_tensorboard(self):
         """Build a tensorboard logger."""
@@ -371,6 +373,35 @@ class Solver(object):
                 self.update_lr(g_lr, d_lr)
                 print ('Decayed learning rates, g_lr: {}, d_lr: {}.'.format(g_lr, d_lr))
 
+
+    def invert_batch(self, x, c_trg, debug=False):
+        x = x.to(self.device)
+        # c_trg_list = self.create_labels(c_trg, self.c_dim, self.dataset, self.selected_attrs)
+        if self.c_dim == 1:
+            c_trg_tilde = (~c_trg.bool()).float().to(self.device)
+        else:
+            # Only flip first attribute. Assumed to be glasses.
+            c_trg_tilde = c_trg.clone().to(self.device)
+            c_trg_tilde[:, 0] = (~c_trg[:,0].bool()).float()
+        deltas = self.G(x, c_trg_tilde)
+        x_tilde = torch.tanh(deltas + x)
+
+        if debug:
+            import matplotlib.pyplot as plt
+            denormed_x = self.denorm(x.data.cpu())
+            denormed_x_tilde = self.denorm(x_tilde.data.cpu())
+            for idx, (real, fake) in enumerate(zip(denormed_x[:3], denormed_x_tilde[:3])):
+                # real = transforms.ToPILImage()(real).convert("RGB")
+                # fake = transforms.ToPILImage()(fake).convert("RGB")
+                real_ax = plt.subplot(3,2,1 + idx*2)
+                real_ax.imshow(real.permute(1,2,0), aspect="equal")
+                real_ax.set_axis_off()
+                fake_ax = plt.subplot(3,2,2 + idx*2)
+                fake_ax.imshow(fake.permute(1,2,0), aspect="equal")
+                fake_ax.set_axis_off()
+            plt.show()
+            
+        return x_tilde, c_trg_tilde
 
     def test(self):
         """Translate images using Fixed-Point GAN trained on a single dataset."""
