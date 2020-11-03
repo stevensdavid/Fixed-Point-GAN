@@ -51,6 +51,9 @@ class CelebA(data.Dataset):
         # label).
         random.seed(1234) 
         random.shuffle(lines)
+        eyeglasses = 0.
+        noneyeglasses = 0.
+        total = 0.
         for i, line in enumerate(lines):
             split = line.split()
             filename = split[0]
@@ -62,13 +65,26 @@ class CelebA(data.Dataset):
                 self.label_attr2idx[attr_name] = len(label)
                 label.append(values[idx] == '1')
 
+                # if in test data and is eyeglasses and exists eyeglasses
+                if (i+1) < 2000 and attr_name == "Eyeglasses":
+                  total = total + 1
+                  if values[idx] == '1':
+                    eyeglasses = eyeglasses + 1
+                  else:
+                    noneyeglasses = noneyeglasses + 1
+                  
             if (i+1) < 2000:
                 self.test_dataset.append([filename, label])
             else:
                 if self.all_data == True:
                   self.test_dataset.append([filename, label])
                 self.train_dataset.append([filename, label])
-
+        print("#Eyeglasses = " + str(eyeglasses))
+        print("#Noneyeglasses = " + str(noneyeglasses))
+        print("#total = " + str(total))
+        print("(#eyeglasses+#noneyeglasses)/#total = " + str((eyeglasses + noneyeglasses) / total))
+        print("#eyeglasses/#total = " + str(eyeglasses / total))
+        
         print('Finished preprocessing the CelebA dataset...')
 
     def __getitem__(self, index):
