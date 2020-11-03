@@ -38,8 +38,8 @@ if config.dataset == "CelebA":
 
     # list of paths
     # image_list = glob.glob(os.path.join(data_path, f'*.{config.image_format}'))
-    # NOTE: EYEGLASSES IS HARD CODED; CHANGE TO TAKE ARGPARSE LIST OF SELECTED_ATTRIBS
-    image_list = dl.get_loader(data_path, 'data/celeba/list_attr_celeba.txt', ['Eyeglasses'], batch_size=100, all_data=True, mode='test', normalize=False)
+    # NOTE: The chosen attribute does not matter. We are only using the images in FID, not the attributes.
+    image_list = dl.get_loader(data_path, 'data/celeba/list_attr_celeba.txt', ['Eyeglasses'], batch_size=100, mode='test', normalize=False)
     # print(imread(str(image_list[10])).astype(np.float32))
     # exit(0)
     # images = np.array([imread(str(fn)).astype(np.float32) for fn in image_list])
