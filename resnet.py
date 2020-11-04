@@ -61,9 +61,9 @@ def train_resnet(config):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cuda":
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    
     # device = "cpu"
 
+    os.makedirs(config.resnet_save_dir, exist_ok=True)
     model = ResNet(num_classes=1)
     train_data = get_loader(
         config.image_dir,
@@ -129,6 +129,9 @@ def train_resnet(config):
             model.train()
             optimizer.zero_grad()
             x = x.to(device)
+            if y.shape[1] > 1:
+                # Only extract first attribute.
+                y = y[:,0:1]
             y = y.to(device)
             with torch.cuda.amp.autocast():
                 output = model(x).to(device)
@@ -224,7 +227,7 @@ def train_resnet(config):
                 torch.save(model.state_dict(), best_model_save_path)
             else:
                 tests_since_best += 1
-                if tests_since_best > config.patience:
+                if tests_since_best >= config.patience:
                     tqdm.write(
                         f"Reached early stopping threshold with patience {config.patience}."
                     )
@@ -268,7 +271,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--patience",
         type=int,
-        default=3,
+        default=2,
         help="patience for early stopping measured in validation loss tracking",
     )
     parser.add_argument('--selected_attrs', '--list', nargs='+', help='selected attributes for the CelebA dataset', default=None)    
