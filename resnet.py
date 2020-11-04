@@ -175,6 +175,9 @@ def train_resnet(config):
                 if generator is not None:
                     x, y = generator.invert_batch(x, y)
                 x = x.to(device)
+                if y.shape[1] > 1:
+                    # Only extract first attribute.
+                    y = y[:,0:1]
                 y = y.to(device)
                 with torch.cuda.amp.autocast():
                     output = model(x).to(device)
