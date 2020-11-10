@@ -76,6 +76,7 @@ def train_resnet(config):
         config.num_workers,
         config.in_memory,
         weighted=config.dataset == "CelebA",
+        augment=config.generator_iters is None,
     )
     val_data = get_loader(
         config.image_dir,
@@ -89,6 +90,7 @@ def train_resnet(config):
         config.num_workers,
         config.in_memory,
         weighted=config.dataset == "CelebA",
+        augment=config.generator_iters is not None,
     )
 
     if config.generator_iters is None:
