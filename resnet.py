@@ -258,9 +258,10 @@ def train_resnet(config):
                         f"Reached early stopping threshold with patience {config.patience}."
                     )
                     break
-    model_save_path = os.path.join(config.resnet_save_dir, f"{config.dataset}_resnet.ckpt")
-    torch.save(model.state_dict(), model_save_path)
-    print(f"Saved model into path {model_save_path}")
+    if not config.use_early_stopping:
+        model_save_path = os.path.join(config.resnet_save_dir, f"{config.dataset}_resnet.ckpt")
+        torch.save(model.state_dict(), model_save_path)
+        print(f"Saved model into path {model_save_path}")
 
 
 def main(config):
