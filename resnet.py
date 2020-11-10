@@ -96,6 +96,10 @@ def train_resnet(config):
         config = add_missing_solver_args(config)
         generator = Solver(train_data, config, train_mode=False)
         generator.restore_model(config.generator_iters)
+        # Train on generated images from validation set.
+        # This is not optimal, but better than training on
+        # the training set.
+        train_data, val_data = val_data, train_data
     else:
         generator = None
 
