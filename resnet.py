@@ -55,7 +55,6 @@ class ResNet(nn.Module):
         return self.activation(x)
 
 
-
 def train_resnet(config):
     logger = Logger(config.log_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -92,7 +91,9 @@ def train_resnet(config):
         weighted=config.dataset == "CelebA",
     )
 
-    if config.generator_iters is not None:
+    if config.generator_iters is None:
+        generator = None
+    else:
         config = add_missing_solver_args(config)
         generator = Solver(train_data, config, train_mode=False)
         generator.restore_model(config.generator_iters)
@@ -100,8 +101,24 @@ def train_resnet(config):
         # This is not optimal, but better than training on
         # the training set.
         train_data, val_data = val_data, train_data
-    else:
-        generator = None
+
+    def _transform_batch(x, y):
+        if generator is None:
+            raise ValueError("Must have provided generator")
+        if config.generator_op == "id":
+            y_trg = y
+        elif config.generator_op == "tilde":
+            # Only flip first attribute. Assumed to be glasses.
+            y_trg = y.clone().to(device)
+            y_trg[:, 0] = (~y_trg[:,0].bool()).float()
+        elif config.generator_op == "random":
+            y_trg = y.clone().to(device)
+            distribution = torch.distributions.bernoulli.Bernoulli(0.5*torch.ones_like(y_trg[:,0]))
+            y_trg[:, 0] = distribution.sample()
+        else:
+            raise ValueError("Invalid generator_op")
+        x_out = generator.transform_batch(x, y_trg)
+        return x_out, y_trg
 
     loss_function = nn.BCEWithLogitsLoss() 
     optimizer = optim.Adam(
@@ -128,7 +145,7 @@ def train_resnet(config):
         tqdm.write("Training")
         for batch_idx, (x, y) in enumerate(train_data, 1):
             if generator is not None:
-                x, y = generator.invert_batch(x, y)
+                x, y = _transform_batch(x, y)
 
             model.train()
             optimizer.zero_grad()
@@ -177,7 +194,7 @@ def train_resnet(config):
             correct_negative = 0
             for batch_idx, (x, y) in enumerate(val_data, 1):
                 if generator is not None:
-                    x, y = generator.invert_batch(x, y)
+                    x, y = _transform_batch(x, y)
                 x = x.to(device)
                 if y.shape[1] > 1:
                     # Only extract first attribute.
@@ -311,6 +328,7 @@ if __name__ == "__main__":
         type=int,
         help="Train on generated data from a model restored form the supplied iteration."
     )
+    parser.add_argument("--generator_op", type=str, choices=["id","tilde","random"], help="The generator transformation to apply.")
 
     config = parser.parse_args()
     main(config)

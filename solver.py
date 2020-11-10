@@ -374,16 +374,10 @@ class Solver(object):
                 print ('Decayed learning rates, g_lr: {}, d_lr: {}.'.format(g_lr, d_lr))
 
 
-    def invert_batch(self, x, c_trg, debug=False):
+    def transform_batch(self, x, c_trg, debug=False):
         x = x.to(self.device)
-        # c_trg_list = self.create_labels(c_trg, self.c_dim, self.dataset, self.selected_attrs)
-        if self.c_dim == 1:
-            c_trg_tilde = (~c_trg.bool()).float().to(self.device)
-        else:
-            # Only flip first attribute. Assumed to be glasses.
-            c_trg_tilde = c_trg.clone().to(self.device)
-            c_trg_tilde[:, 0] = (~c_trg[:,0].bool()).float()
-        deltas = self.G(x, c_trg_tilde)
+        c_trg = c_trg.to(self.device)
+        deltas = self.G(x, c_trg)
         x_tilde = torch.tanh(deltas + x)
 
         if debug:
@@ -401,7 +395,7 @@ class Solver(object):
                 fake_ax.set_axis_off()
             plt.show()
             
-        return x_tilde, c_trg_tilde
+        return x_tilde
 
     def test(self):
         """Translate images using Fixed-Point GAN trained on a single dataset."""
