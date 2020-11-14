@@ -28,7 +28,7 @@ def main(config):
     if config.dataset in ['CelebA']:
         data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
                                    config.crop_size, config.image_size, config.batch_size,
-                                   'CelebA', config.mode, config.all_data, config.num_workers)
+                                   'CelebA', config.mode, config.all_data, config.num_workers, isGlasses=config.eyeglasses)
 
 
     elif config.dataset in ['BRATS']:
@@ -103,7 +103,9 @@ if __name__ == '__main__':
     parser.add_argument('--random_target', type=float, default=None, help='select target domain 1 with the specified probability \'p\', and select the other target domain (0) with probability \'1-p\'. Only supported for PCam and CelebA. Assumes binary label for target domain (default: None -- this always chooses the opposite label)')
     parser.add_argument('--random_target_class', type=str, default=None, help='Choose the attribute to which to apply the random target domain, e.g Eyeglasses. Undefined behavior if used on hair colors.')
     parser.add_argument('--all_data', default=False, dest="all_data", action="store_true", help='Use both the training and test data during testing. Only works for the CelebA dataset -- ignored for other datasets. Default: False')
-    
+    parser.add_argument('--eyeglasses', default=None, dest="eyeglasses", action="store_true")
+    parser.add_argument('--no_eyeglasses', dest="eyeglasses", action="store_false")
+
     # Miscellaneous.
     parser.add_argument('--num_workers', type=int, default=1)
     parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'test_brats'])

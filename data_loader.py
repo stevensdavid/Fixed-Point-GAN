@@ -13,7 +13,7 @@ import numpy as np
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
 
-    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, all_data):
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, all_data, isGlasses=None):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
         self.attr_path = attr_path
@@ -26,6 +26,7 @@ class CelebA(data.Dataset):
         self.attr2idx = {}
         self.label_attr2idx = {}
         self.idx2attr = {}
+        self.isGlasses = isGlasses
         self.preprocess()
 
         if mode == 'train':
@@ -74,7 +75,12 @@ class CelebA(data.Dataset):
                     noneyeglasses = noneyeglasses + 1
                   
             if (i+1) < 2000:
-                self.test_dataset.append([filename, label])
+                # if eyeglasses exist, only choose them for generation
+                if self.isGlasses is None:
+                  self.test_dataset.append([filename, label])
+                else:
+                  if(label[self.label_attr2idx["Eyeglasses"]] == self.isGlasses):
+                    self.test_dataset.append([filename, label])
             else:
                 if self.all_data == True:
                   self.test_dataset.append([filename, label])
@@ -84,6 +90,12 @@ class CelebA(data.Dataset):
         print("#total = " + str(total))
         print("(#eyeglasses+#noneyeglasses)/#total = " + str((eyeglasses + noneyeglasses) / total))
         print("#eyeglasses/#total = " + str(eyeglasses / total))
+        # dataset has format [['pathtoimg', [attr1Boolean, attr2Boolean]], anotherinput, ...]
+        print(self.isGlasses)
+        if self.isGlasses is not None:
+          data = np.array([(1 if x[1][self.label_attr2idx["Eyeglasses"]] == self.isGlasses else 0) for x in self.test_dataset])
+          print(str(len(data[data == 1])))
+        # print("eyeglass total calced from slicing: " + "hi")
         
         print('Finished preprocessing the CelebA dataset...')
 
@@ -209,7 +221,7 @@ class PCam(data.Dataset):
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
                batch_size=16, dataset='CelebA', mode='train', all_data=False, num_workers=1,
-               normalize=True):
+               normalize=True, isGlasses=None):
     """Build and return a data loader."""
     transform = []
     if mode == 'train':
@@ -229,7 +241,7 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     transform = T.Compose(transform)
 
     if dataset == 'CelebA':
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, all_data)
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, all_data, isGlasses)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':

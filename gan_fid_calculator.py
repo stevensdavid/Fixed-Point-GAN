@@ -13,15 +13,16 @@ import sys
 parser = ArgumentParser()
 parser.add_argument("--dataset", type=str, default="PCam", choices=["CelebA", "PCam"])
 parser.add_argument("--image_format", type=str, default="jpg", choices=["jpg", "png"])
+parser.add_argument("--stats_path", type=str)
 config = parser.parse_args()
 
 # Paths
 if config.dataset == "CelebA":
     image_path = 'celeba/results' # set path to some generated images
-    stats_path = 'fid_stats_celeba.npz'
+    stats_path = config.stats_path
 elif config.dataset == "PCam":
     image_path = 'pcam/results' # set path to some generated images
-    stats_path = 'fid_stats_pcam.npz' # training set statistics
+    stats_path = stats_path # training set statistics
 else:
   print("Unsupported dataset")
   sys.exit(1)

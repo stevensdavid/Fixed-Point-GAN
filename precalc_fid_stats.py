@@ -14,6 +14,8 @@ import data_loader as dl
 parser = ArgumentParser()
 parser.add_argument("--dataset", type=str, default="PCam", choices=["CelebA", "PCam"])
 parser.add_argument("--image_format", type=str, default="jpg", choices=["jpg", "png"])
+parser.add_argument('--eyeglasses', default=None, dest="eyeglasses", action="store_true")
+parser.add_argument('--no_eyeglasses', dest="eyeglasses", action="store_false")
 config = parser.parse_args()
 
 ########
@@ -39,11 +41,11 @@ if config.dataset == "CelebA":
     # list of paths
     # image_list = glob.glob(os.path.join(data_path, f'*.{config.image_format}'))
     # NOTE: The chosen attribute does not matter. We are only using the images in FID, not the attributes.
-    image_list = dl.get_loader(data_path, 'data/celeba/list_attr_celeba.txt', ['Eyeglasses'], batch_size=100, mode='test', normalize=False)
+    image_list = dl.get_loader(data_path, 'data/celeba/list_attr_celeba.txt', ['Eyeglasses'], batch_size=100, mode='test', normalize=False, isGlasses=config.eyeglasses)
     # print(imread(str(image_list[10])).astype(np.float32))
     # exit(0)
     # images = np.array([imread(str(fn)).astype(np.float32) for fn in image_list])
-    output_path = 'fid_stats_celeba.npz' # path for where to store the statistics
+    output_path = f"fid_stats_celeba{'' if config.eyeglasses is None else ('_eyeglasses' if config.eyeglasses == True else '_no_eyeglasses')}.npz" # path for where to store the statistics
 elif config.dataset == "PCam":
     data_path = 'data/pcam' # set path to training set images
 
@@ -62,7 +64,7 @@ print("create inception graph..", end=" ", flush=True)
 fid.create_inception_graph(inception_path)  # load the graph into the current TF graph
 print("ok")
 
-print("calculte FID stats..", end=" ", flush=True)
+print("calculate FID stats..", end=" ", flush=True)
 with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     if config.dataset == "CelebA":
