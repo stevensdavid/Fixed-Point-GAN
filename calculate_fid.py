@@ -32,15 +32,15 @@ if __name__ == "__main__":
     # fid stats for total, for only glasses and for only non-glasses
     fid_stats_path = f"fid_stats_{config.dataset.lower()}.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format}".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --from_files".split())
     
     fid_stats_path = f"fid_stats_{config.dataset.lower()}_eyeglasses.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --eyeglasses".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --eyeglasses --from_files".split())
     
     fid_stats_path = f"fid_stats_{config.dataset.lower()}_no_eyeglasses.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --no_eyeglasses".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --no_eyeglasses --from_files".split())
 
     # # fid stats for generated total
     # if config.reuse_generated == False:

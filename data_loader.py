@@ -8,6 +8,7 @@ import random
 from glob import glob
 import h5py
 import numpy as np
+from torchvision.utils import save_image
 
 
 class CelebA(data.Dataset):
@@ -255,6 +256,15 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
                                   shuffle=(mode=='train'),
                                   num_workers=num_workers)
     return data_loader
+
+
+def dump_images_to_dir(dl: data.DataLoader, dirname: str):
+    data_iter = iter(dl)
+    idx = 0
+    for images, _ in data_iter:
+        for image in images:
+            save_image(image, fp=os.path.join(dirname, f"{idx}.jpg"), nrow=1, padding=0, normalize=True)
+            idx += 1
 
 if __name__ == "__main__":
     PCam("data/pcam", [], "test")

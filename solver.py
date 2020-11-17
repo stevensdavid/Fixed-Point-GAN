@@ -381,7 +381,7 @@ class Solver(object):
                     x_concat = torch.cat(x_fake_list, dim=3)
                     sample_path = os.path.join(self.sample_dir, '{}-images.jpg'.format(i+1))
                     save_image(self.denorm(x_concat.data.cpu()), sample_path, nrow=1, padding=0)
-                    print('Saved real and fake images into {}...'.format(sample_path))
+                    # print('Saved real and fake images into {}...'.format(sample_path))
 
             # Save model checkpoints.
             if (i+1) % self.model_save_step == 0:
@@ -437,12 +437,12 @@ class Solver(object):
                   for j in range(c_org.shape[0]):
                     result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i*self.batch_size+j+1))
                     save_image(self.denorm(x_concat[j].data.cpu()), result_path, nrow=1, padding=0)
-                    print('Saved real and fake images into {}...'.format(result_path))
+                    # print('Saved real and fake images into {}...'.format(result_path))
                 else:
                   x_concat = torch.cat(x_fake_list, dim=3) # merge all in batch into one image
                   result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
                   save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
-                  print('Saved real and fake images into {}...'.format(result_path))
+                #   print('Saved real and fake images into {}...'.format(result_path))
 
 
 
@@ -505,4 +505,4 @@ class Solver(object):
                 x_concat = torch.cat(x_fake_list, dim=3)
                 result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
                 save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
-                print('Saved real and fake images into {}...'.format(result_path))
+                # print('Saved real and fake images into {}...'.format(result_path))
