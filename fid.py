@@ -87,7 +87,6 @@ def get_activations(images, sess, batch_size=50, verbose=False):
     if isinstance(images, data.DataLoader): 
       n_images = len(images.dataset)
       batch_size = images.batch_size
-      print(batch_size)
     else:
       n_images = images.shape[0]
 
@@ -108,7 +107,6 @@ def get_activations(images, sess, batch_size=50, verbose=False):
             end = n_images
 
         batch = x.permute(0,2,3,1)
-        print(batch.shape)
         pred = sess.run(inception_layer, {'FID_Inception_Net/ExpandDims:0': batch})
         pred_arr[start:end] = pred.reshape(batch.shape[0],-1)
     else:
