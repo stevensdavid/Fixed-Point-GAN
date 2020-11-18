@@ -30,17 +30,18 @@ if __name__ == "__main__":
         os.remove(f)
 
     # fid stats for total, for only glasses and for only non-glasses
+    use_files = "--from_files" if config.dataset == "CelebA" else ""
     fid_stats_path = f"fid_stats_{config.dataset.lower()}.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --from_files".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} {use_files}".split())
     
     fid_stats_path = f"fid_stats_{config.dataset.lower()}_1.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --filter_class 1 --from_files".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --filter_class 1 {use_files}".split())
     
     fid_stats_path = f"fid_stats_{config.dataset.lower()}_0.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --filter_class 0 --from_files".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --filter_class 0 {use_files}".split())
 
     # # fid stats for generated total
     # if config.reuse_generated == False:

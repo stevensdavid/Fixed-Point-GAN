@@ -190,8 +190,8 @@ class PCam(data.Dataset):
             x_file = "train_x.h5"
             y_file = "train_y.h5"
         elif self.mode == "val":
-            x_file = "val_x.h5"
-            y_file = "val_y.h5"
+            x_file = "valid_x.h5"
+            y_file = "valid_y.h5"
         elif self.mode == "test":
             x_file = "test_x.h5"
             y_file = "test_y.h5"
@@ -203,7 +203,7 @@ class PCam(data.Dataset):
         self.filtered_indices = [
             idx for idx, y in enumerate(h5py.File(self.y_file, 'r', swmr=True)['y']) if y == self.filter_class or self.filter_class is None
         ]
-        self.num_images = len(self.filtered_indicies)
+        self.num_images = len(self.filtered_indices)
         # TODO: Pre-loading the files here would be faster, but I have not been able
         #       to make it work as the h5py objects cannot be pickled and can
         #       therefore not be used in PyTorch. This can probably be fixed, but I
