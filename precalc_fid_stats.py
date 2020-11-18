@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     # Both datasets will, after loaded, be in an RGB format between 0 and 255
     # (based on inspection of files). They will be converted to float.
-    output_suffix = '' if config.filter_class is None else (str(config.filter_class))
+    output_suffix = '' if config.filter_class is None else f"_{config.filter_class}"
     if config.dataset == "CelebA":
         data_path = "data/celeba/images"
 

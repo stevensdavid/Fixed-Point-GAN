@@ -422,7 +422,7 @@ class Solver(object):
                   x_fake_list = [x_real]
 
                 # Translate images.
-                if self.single_image_output:
+                if self.single_image_output and self.dataset == "CelebA":
                   c_trg = self.data_loader.dataset.label_attr2idx[self.random_target_class]
                   x_fake_list.append(torch.tanh(x_real + self.G(x_real, c_trg_list[c_trg])))
                 else:

@@ -85,7 +85,7 @@ if __name__ == "__main__":
               --image_size 96 --crop_size 96 --c_dim 1  
               --model_save_dir pretrained_models/pcam 
               --result_dir pcam/results --test_iters {config.test_iters}
-              --batch_size {config.batch_size} --random_target 0.5 --exclude_source --single_image_output --filter_class 1
+              --batch_size {config.batch_size} --random_target 1 --exclude_source --single_image_output --filter_class 1
           """ .replace("\n", "").split()
       elif config.dataset == "CelebA":
           # not sure if c_dim == selected_attrs in the case of hair related attributes, 

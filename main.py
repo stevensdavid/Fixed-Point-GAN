@@ -103,8 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_target', type=float, default=None, help='select target domain 1 with the specified probability \'p\', and select the other target domain (0) with probability \'1-p\'. Only supported for PCam and CelebA. Assumes binary label for target domain (default: None -- this always chooses the opposite label)')
     parser.add_argument('--random_target_class', type=str, default=None, help='Choose the attribute to which to apply the random target domain, e.g Eyeglasses. Undefined behavior if used on hair colors.')
     parser.add_argument('--all_data', default=False, dest="all_data", action="store_true", help='Use both the training and test data during testing. Only works for the CelebA dataset -- ignored for other datasets. Default: False')
-    parser.add_argument('--eyeglasses', default=None, dest="eyeglasses", action="store_true")
-    parser.add_argument('--no_eyeglasses', dest="eyeglasses", action="store_false")
+    parser.add_argument('--filter_class', default=None, type=int, help="Selector to only include class 0 or 1")
 
     # Miscellaneous.
     parser.add_argument('--num_workers', type=int, default=1)

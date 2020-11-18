@@ -22,7 +22,7 @@ if config.dataset == "CelebA":
     stats_path = config.stats_path
 elif config.dataset == "PCam":
     image_path = 'pcam/results' # set path to some generated images
-    stats_path = stats_path # training set statistics
+    stats_path = config.stats_path # training set statistics
 else:
   print("Unsupported dataset")
   sys.exit(1)
