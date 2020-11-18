@@ -34,13 +34,13 @@ if __name__ == "__main__":
     if not os.path.exists(fid_stats_path):
         run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --from_files".split())
     
-    fid_stats_path = f"fid_stats_{config.dataset.lower()}_eyeglasses.npz"
+    fid_stats_path = f"fid_stats_{config.dataset.lower()}_1.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --eyeglasses --from_files".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --filter_class 1 --from_files".split())
     
-    fid_stats_path = f"fid_stats_{config.dataset.lower()}_no_eyeglasses.npz"
+    fid_stats_path = f"fid_stats_{config.dataset.lower()}_0.npz"
     if not os.path.exists(fid_stats_path):
-        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --no_eyeglasses --from_files".split())
+        run_command(f"{config.python} precalc_fid_stats.py --dataset {config.dataset} --image_format {config.input_image_format} --filter_class 0 --from_files".split())
 
     # # fid stats for generated total
     # if config.reuse_generated == False:
@@ -84,7 +84,7 @@ if __name__ == "__main__":
               --image_size 96 --crop_size 96 --c_dim 1  
               --model_save_dir pretrained_models/pcam 
               --result_dir pcam/results --test_iters {config.test_iters}
-              --batch_size {config.batch_size} --random_target 0.5 --exclude_source --single_image_output 
+              --batch_size {config.batch_size} --random_target 0.5 --exclude_source --single_image_output --filter_class 1
           """ .replace("\n", "").split()
       elif config.dataset == "CelebA":
           # not sure if c_dim == selected_attrs in the case of hair related attributes, 
@@ -97,14 +97,14 @@ if __name__ == "__main__":
               --batch_size {config.batch_size} --random_target 1 
               --random_target_class Eyeglasses
               --exclude_source --selected_attrs {" ".join(str(x) for x in config.selected_attrs)} 
-              --single_image_output --eyeglasses
+              --single_image_output --filter_class 1
           """ .replace("\n", "").split()
       else:
           print("Unsupported dataset")
           sys.exit(1)
     run_command(command)
-    print("FID BETWEEN REAL EYEGLASS IMAGES AND FAKE EYEGLASS IMAGES GENERATED FROM IDENTITY TRANSFORM: ", end='')
-    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_eyeglasses.npz".split())
+    print("FID BETWEEN 1 AND ID(1): ", end='')
+    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_1.npz".split())
 
     files = glob.glob('./celeba/results/*')
     for f in files:
@@ -118,7 +118,7 @@ if __name__ == "__main__":
               --image_size 96 --crop_size 96 --c_dim 1  
               --model_save_dir pretrained_models/pcam 
               --result_dir pcam/results --test_iters {config.test_iters}
-              --batch_size {config.batch_size} --random_target 0.5 --exclude_source --single_image_output
+              --batch_size {config.batch_size} --random_target 1 --exclude_source --single_image_output --filter_class 0
           """ .replace("\n", "").split()
       elif config.dataset == "CelebA":
           # not sure if c_dim == selected_attrs in the case of hair related attributes, 
@@ -131,14 +131,14 @@ if __name__ == "__main__":
               --batch_size {config.batch_size} --random_target 1 
               --random_target_class Eyeglasses
               --exclude_source --selected_attrs {" ".join(str(x) for x in config.selected_attrs)} 
-              --single_image_output --no_eyeglasses
+              --single_image_output --filter_class 0
           """ .replace("\n", "").split()
       else:
           print("Unsupported dataset")
           sys.exit(1)
     run_command(command)
-    print("FID BETWEEN REAL EYEGLASS IMAGES AND FAKE EYEGLASS IMAGES GENERATED FROM NON EYEGLASS DATA: ", end='')
-    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_eyeglasses.npz".split())
+    print("FID BETWEEN 1 AND tilde(0): ", end='')
+    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_1.npz".split())
 
     files = glob.glob('./celeba/results/*')
     for f in files:
@@ -152,7 +152,7 @@ if __name__ == "__main__":
               --image_size 96 --crop_size 96 --c_dim 1  
               --model_save_dir pretrained_models/pcam 
               --result_dir pcam/results --test_iters {config.test_iters}
-              --batch_size {config.batch_size} --random_target 0.5 --exclude_source --single_image_output 
+              --batch_size {config.batch_size} --random_target 0 --exclude_source --single_image_output --filter_class 1
           """ .replace("\n", "").split()
       elif config.dataset == "CelebA":
           # not sure if c_dim == selected_attrs in the case of hair related attributes, 
@@ -165,14 +165,14 @@ if __name__ == "__main__":
               --batch_size {config.batch_size} --random_target 0 
               --random_target_class Eyeglasses
               --exclude_source --selected_attrs {" ".join(str(x) for x in config.selected_attrs)} 
-              --single_image_output --eyeglasses
+              --single_image_output --filter_class 1
           """ .replace("\n", "").split()
       else:
           print("Unsupported dataset")
           sys.exit(1)
     run_command(command)
-    print("FID BETWEEN REAL NON-EYEGLASS IMAGES AND FAKE NON-EYEGLASS IMAGES GENERATED FROM EYEGLASS DATA: ", end='')
-    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_no_eyeglasses.npz".split())
+    print("FID BETWEEN 0 AND tilde(1): ", end='')
+    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_0.npz".split())
 
     files = glob.glob('./celeba/results/*')
     for f in files:
@@ -186,7 +186,7 @@ if __name__ == "__main__":
               --image_size 96 --crop_size 96 --c_dim 1  
               --model_save_dir pretrained_models/pcam 
               --result_dir pcam/results --test_iters {config.test_iters}
-              --batch_size {config.batch_size} --random_target 0.5 --exclude_source --single_image_output
+              --batch_size {config.batch_size} --random_target 0 --exclude_source --single_image_output --filter_class 0
           """ .replace("\n", "").split()
       elif config.dataset == "CelebA":
           # not sure if c_dim == selected_attrs in the case of hair related attributes, 
@@ -199,14 +199,14 @@ if __name__ == "__main__":
               --batch_size {config.batch_size} --random_target 0 
               --random_target_class Eyeglasses
               --exclude_source --selected_attrs {" ".join(str(x) for x in config.selected_attrs)} 
-              --single_image_output --no_eyeglasses
+              --single_image_output --filter_class 0
           """ .replace("\n", "").split()
       else:
           print("Unsupported dataset")
           sys.exit(1)
     run_command(command)
-    print("FID BETWEEN REAL NON-EYEGLASS IMAGES AND FAKE NON-EYEGLASS IMAGES GENERATED FROM IDENTITY TRANSFORM: ", end='')
-    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_no_eyeglasses.npz".split())
+    print("FID BETWEEN 0 AND id(0): ", end='')
+    run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_0.npz".split())
 
     files = glob.glob('./celeba/results/*')
     for f in files:
