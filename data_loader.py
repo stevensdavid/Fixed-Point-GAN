@@ -14,7 +14,7 @@ from torchvision.utils import save_image
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
 
-    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, all_data, isGlasses=None):
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, all_data, filter_class=None):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
         self.attr_path = attr_path
@@ -27,7 +27,7 @@ class CelebA(data.Dataset):
         self.attr2idx = {}
         self.label_attr2idx = {}
         self.idx2attr = {}
-        self.isGlasses = isGlasses
+        self.filter_class = filter_class
         self.preprocess()
 
         if mode == 'train':
@@ -77,10 +77,10 @@ class CelebA(data.Dataset):
                   
             if (i+1) < 2000:
                 # if eyeglasses exist, only choose them for generation
-                if self.isGlasses is None:
+                if self.filter_class is None:
                   self.test_dataset.append([filename, label])
                 else:
-                  if(label[self.label_attr2idx["Eyeglasses"]] == self.isGlasses):
+                  if(label[self.label_attr2idx["Eyeglasses"]] == self.filter_class):
                     self.test_dataset.append([filename, label])
             else:
                 if self.all_data == True:
@@ -92,9 +92,9 @@ class CelebA(data.Dataset):
         print("(#eyeglasses+#noneyeglasses)/#total = " + str((eyeglasses + noneyeglasses) / total))
         print("#eyeglasses/#total = " + str(eyeglasses / total))
         # dataset has format [['pathtoimg', [attr1Boolean, attr2Boolean]], anotherinput, ...]
-        print(self.isGlasses)
-        if self.isGlasses is not None:
-          data = np.array([(1 if x[1][self.label_attr2idx["Eyeglasses"]] == self.isGlasses else 0) for x in self.test_dataset])
+        print(self.filter_class)
+        if self.filter_class is not None:
+          data = np.array([(1 if x[1][self.label_attr2idx["Eyeglasses"]] == self.filter_class else 0) for x in self.test_dataset])
           print(str(len(data[data == 1])))
         # print("eyeglass total calced from slicing: " + "hi")
         
@@ -170,7 +170,7 @@ class BRATS_SYN(data.Dataset):
 class PCam(data.Dataset):
     """Dataset class for the PatchCamelyon dataset."""
 
-    def __init__(self, image_dir, transform, mode):
+    def __init__(self, image_dir, transform, mode, filter_class=None):
         """Initialize and Load the PCam dataset."""
         if mode not in ("train", "test", "val"):
             raise ValueError(f"Support modes are train, test and val, received: {mode}")
@@ -180,6 +180,8 @@ class PCam(data.Dataset):
         self.x_file = None
         self.y_file = None
         self.num_images = None
+        self.filter_class = filter_class
+        self.filtered_indices = None
         self.load_data()
 
     def load_data(self):
@@ -194,11 +196,14 @@ class PCam(data.Dataset):
             x_file = "test_x.h5"
             y_file = "test_y.h5"
         else:
-            raise ValueError(f"Support modes are train, test and val, received: {mode}")
+            raise ValueError(f"Support modes are train, test and val, received: {self.mode}")
         self.x_file = os.path.join(self.image_dir, x_file)
         x = h5py.File(os.path.join(self.image_dir, x_file), 'r', swmr=True)['x']
-        self.num_images = len(x)
         self.y_file = os.path.join(self.image_dir, y_file)
+        self.filtered_indices = [
+            idx for idx, y in enumerate(h5py.File(self.y_file, 'r', swmr=True)['y']) if y == self.filter_class or self.filter_class is None
+        ]
+        self.num_images = len(self.filtered_indicies)
         # TODO: Pre-loading the files here would be faster, but I have not been able
         #       to make it work as the h5py objects cannot be pickled and can
         #       therefore not be used in PyTorch. This can probably be fixed, but I
@@ -210,10 +215,11 @@ class PCam(data.Dataset):
 
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
-        x = h5py.File(self.x_file, 'r', swmr=True)['x']
+        raw_index = self.filtered_indices[index]
         y = h5py.File(self.y_file, 'r', swmr=True)['y']
-        img = Image.fromarray(x[index, ...].astype('uint8'), 'RGB')
-        return self.transform(img), torch.from_numpy(y[index, ...].flatten()).float()
+        x = h5py.File(self.x_file, 'r', swmr=True)['x']
+        img = Image.fromarray(x[raw_index, ...].astype('uint8'), 'RGB')
+        return self.transform(img), torch.from_numpy(y[raw_index, ...].flatten()).float()
 
     def __len__(self):
         """Return the number of images."""
@@ -222,7 +228,7 @@ class PCam(data.Dataset):
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
                batch_size=16, dataset='CelebA', mode='train', all_data=False, num_workers=1,
-               normalize=True, isGlasses=None):
+               normalize=True, filter_class=None):
     """Build and return a data loader."""
     transform = []
     if mode == 'train':
@@ -242,11 +248,11 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     transform = T.Compose(transform)
 
     if dataset == 'CelebA':
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, all_data, isGlasses)
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, all_data, filter_class)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
-        dataset = PCam(image_dir, transform, mode)
+        dataset = PCam(image_dir, transform, mode, filter_class)
     
     elif dataset == 'Directory':
         dataset = ImageFolder(image_dir, transform)
