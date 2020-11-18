@@ -33,6 +33,7 @@ if __name__ == "__main__":
 
     # Both datasets will, after loaded, be in an RGB format between 0 and 255
     # (based on inspection of files). They will be converted to float.
+    output_suffix = '' if config.filter_class is None else (str(config.filter_class))
     if config.dataset == "CelebA":
         data_path = "data/celeba/images"
 
@@ -43,16 +44,17 @@ if __name__ == "__main__":
         # print(imread(str(image_list[10])).astype(np.float32))
         # exit(0)
         # images = np.array([imread(str(fn)).astype(np.float32) for fn in image_list])
-        output_path = f"fid_stats_celeba{'' if config.filter_class is None else ('_eyeglasses' if config.filter_class == 1 else '_no_eyeglasses')}.npz" # path for where to store the statistics
+        output_path = f"fid_stats_celeba{output_suffix}.npz" # path for where to store the statistics
     elif config.dataset == "PCam":
         data_path = 'data/pcam' # set path to training set images
 
         # array-like object of images stored in h5py format
-        image_list = h5py.File(os.path.join(data_path, 'test_x.h5'), 'r', swmr=True)['x']
+        image_list = dl.get_loader(data_path, None, None, dataset=config.dataset, crop_size=96, image_size=96, batch_size=50, mode='val', normalize=False, filter_class=config.filter_class, num_workers=0)
+        # image_list = h5py.File(os.path.join(data_path, 'test_x.h5'), 'r', swmr=True)['x']
         # print(image_list[10])
         # exit(0)
         # images = np.array([files[index, ...].astype(np.float32) for index in range(len(files))])
-        output_path = 'fid_stats_pcam.npz' # path for where to store the statistics
+        output_path = f'fid_stats_pcam{output_suffix}.npz' # path for where to store the statistics
     else:
         print("Unsupported dataset")
         sys.exit(1)
@@ -71,9 +73,9 @@ if __name__ == "__main__":
         sess.run(tf.global_variables_initializer())
         if config.from_files:
             if config.filter_class == 1:
-                data_dir = os.path.join(data_path, "eyeglasses")
+                data_dir = os.path.join(data_path, "1")
             elif config.filter_class == 0:
-                data_dir = os.path.join(data_path, "no_eyeglasses")
+                data_dir = os.path.join(data_path, "0")
             else:
                 data_dir = data_path
             if not os.path.exists(data_dir):

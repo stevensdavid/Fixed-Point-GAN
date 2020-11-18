@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument("--reuse_generated", type=bool, default=False, help="try to reuse generated images instead of generating new ones")
     config = parser.parse_args()
 
-    files = glob.glob('./celeba/results/*')
+    files = glob.glob(f'./{config.dataset.lower()}/results/*')
     for f in files:
         os.remove(f)
 
@@ -72,7 +72,7 @@ if __name__ == "__main__":
     # print("FID ON COMPLETE TEST DATA: ", end='')
     # run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}.npz".split())
 
-    files = glob.glob('./celeba/results/*')
+    files = glob.glob(f'./{config.dataset.lower()}/results/*')
     for f in files:
       os.remove(f)
 
@@ -106,7 +106,7 @@ if __name__ == "__main__":
     print("FID BETWEEN 1 AND ID(1): ", end='')
     run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_1.npz".split())
 
-    files = glob.glob('./celeba/results/*')
+    files = glob.glob(f'./{config.dataset.lower()}/results/*')
     for f in files:
       os.remove(f)
 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     print("FID BETWEEN 1 AND tilde(0): ", end='')
     run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_1.npz".split())
 
-    files = glob.glob('./celeba/results/*')
+    files = glob.glob(f'./{config.dataset.lower()}/results/*')
     for f in files:
       os.remove(f)
 
@@ -174,7 +174,7 @@ if __name__ == "__main__":
     print("FID BETWEEN 0 AND tilde(1): ", end='')
     run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_0.npz".split())
 
-    files = glob.glob('./celeba/results/*')
+    files = glob.glob(f'./{config.dataset.lower()}/results/*')
     for f in files:
       os.remove(f)
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     print("FID BETWEEN 0 AND id(0): ", end='')
     run_command(f"{config.python} gan_fid_calculator.py --dataset {config.dataset} --stats_path fid_stats_{config.dataset.lower()}_0.npz".split())
 
-    files = glob.glob('./celeba/results/*')
+    files = glob.glob(f'./{config.dataset.lower()}/results/*')
     for f in files:
       os.remove(f)
 
