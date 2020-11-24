@@ -28,7 +28,7 @@ def main(config):
     if config.dataset in ['CelebA']:
         data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
                                    config.crop_size, config.image_size, config.batch_size,
-                                   'CelebA', config.mode, config.all_data, config.num_workers, filter_class=config.eyeglasses)
+                                   'CelebA', config.mode, config.all_data, config.num_workers, filter_class=config.filter_class)
 
 
     elif config.dataset in ['BRATS']:
@@ -40,7 +40,7 @@ def main(config):
     elif config.dataset in ['PCam']:
         data_loader = get_loader(config.image_dir, None, None,
                                    config.crop_size, config.image_size, config.batch_size,
-                                   'PCam', config.mode, config.num_workers)
+                                   'PCam', config.mode, config.num_workers, filter_class=config.filter_class)
 
 
     elif config.dataset in ['Directory']:
