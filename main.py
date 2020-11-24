@@ -26,21 +26,29 @@ def main(config):
     data_loader = None
 
     if config.dataset in ['CelebA']:
-        data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
-                                   config.crop_size, config.image_size, config.batch_size,
-                                   'CelebA', config.mode, config.all_data, config.num_workers)
+        if config.eval_dataset == 'default':
+            data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
+                                    config.crop_size, config.image_size, config.batch_size,
+                                    'CelebA', config.mode, config.num_workers)
+        else:
+            data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
+                                    config.crop_size, config.image_size, config.batch_size,
+                                    'CelebA', 'train', config.num_workers)                           
 
+    elif config.dataset in ['PCam']:
+        if config.eval_dataset == 'default':
+            data_loader = get_loader(config.image_dir, None, None,
+                                   config.crop_size, config.image_size, config.batch_size,
+                                   'PCam', config.mode, config.num_workers)
+        else:
+            data_loader = get_loader(config.image_dir, None, None,
+                                   config.crop_size, config.image_size, config.batch_size,
+                                   'PCam', 'train', config.num_workers)
 
     elif config.dataset in ['BRATS']:
         data_loader = get_loader(config.image_dir, None, None,
                                    config.crop_size, config.image_size, config.batch_size,
                                    'BRATS', config.mode, config.num_workers)
-
-
-    elif config.dataset in ['PCam']:
-        data_loader = get_loader(config.image_dir, None, None,
-                                   config.crop_size, config.image_size, config.batch_size,
-                                   'PCam', config.mode, config.num_workers)
 
 
     elif config.dataset in ['Directory']:
@@ -51,18 +59,25 @@ def main(config):
         
     # Solver for training and testing Fixed-Point GAN.
     solver = Solver(data_loader, config)
-    
+
+
 
     if config.mode == 'train':
-        if config.dataset in ['CelebA', 'BRATS', 'PCam', 'Directory']:
+        if config.dataset in ['CelebA', 'PCam', 'BRATS', 'Directory']:
             solver.train()
     elif config.mode == 'test':
-        if config.dataset in ['CelebA', 'PCam', 'Directory']:
+        if config.dataset in ['Directory']:
             solver.test()
+        elif config.dataset in ['PCam']:
+            solver.test_pcam()
+        elif config.dataset in ['CelebA']:
+            solver.test_celeba_multi()
     elif config.mode == 'test_brats':
         if config.dataset in ['BRATS']:
             solver.test_brats()
-
+    elif config.mode == 'generate_dataset':
+        if config.dataset in ['PCam']:
+            solve.generate_dataset()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -82,7 +97,7 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_id', type=float, default=10, help='weight for identity loss')
     
     # Training configuration.
-    parser.add_argument('--dataset', type=str, default='CelebA', choices=['CelebA', 'BRATS', 'PCam', 'Directory'])
+    parser.add_argument('--dataset', type=str, default='PCam', choices=['CelebA', 'BRATS', 'PCam', 'Directory'])
     parser.add_argument('--batch_size', type=int, default=16, help='mini-batch size')
     parser.add_argument('--num_iters', type=int, default=200000, help='number of total iterations for training D')
     parser.add_argument('--num_iters_decay', type=int, default=100000, help='number of iterations for decaying lr')
@@ -97,17 +112,14 @@ if __name__ == '__main__':
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
-    parser.add_argument('--include_source', default=True, dest="include_source", action="store_true", help='include column containing source image from output (included by default; if single_image_output is specified, include_source is always set to false)')
-    parser.add_argument('--exclude_source', dest="include_source", action="store_false", help='exclude column containing source image from output')
-    parser.add_argument('--single_image_output', default=False, dest="single_image_output", action="store_true", help='output one image for each input image, regardless of batch size used by data loader (default: False)')
-    parser.add_argument('--random_target', type=float, default=None, help='select target domain 1 with the specified probability \'p\', and select the other target domain (0) with probability \'1-p\'. Only supported for PCam and CelebA. Assumes binary label for target domain (default: None -- this always chooses the opposite label)')
-    parser.add_argument('--random_target_class', type=str, default=None, help='Choose the attribute to which to apply the random target domain, e.g Eyeglasses. Undefined behavior if used on hair colors.')
-    parser.add_argument('--all_data', default=False, dest="all_data", action="store_true", help='Use both the training and test data during testing. Only works for the CelebA dataset -- ignored for other datasets. Default: False')
-    
+    parser.add_argument('--eval_resnet_name', type=str, default=200000, help='name of resnet in /models to load for evaluation')
+    parser.add_argument('--eval_dataset', type=str, default='default', help='Valid datasets are default and training')
+
+
     # Miscellaneous.
     parser.add_argument('--num_workers', type=int, default=1)
-    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'test_brats'])
-    parser.add_argument('--use_tensorboard', type=str2bool, default=True)
+    parser.add_argument('--mode', type=str, default='train', choices=['train', 'test', 'test_brats', ])
+    parser.add_argument('--use_tensorboard', type=str2bool, default=False)
 
     # Directories.
     parser.add_argument('--image_dir', type=str, default='data/celeba/images')
@@ -120,7 +132,7 @@ if __name__ == '__main__':
     # Step size.
     parser.add_argument('--log_step', type=int, default=10)
     parser.add_argument('--sample_step', type=int, default=1000)
-    parser.add_argument('--model_save_step', type=int, default=10000)
+    parser.add_argument('--model_save_step', type=int, default=1000)
     parser.add_argument('--lr_update_step', type=int, default=1000)
 
     config = parser.parse_args()

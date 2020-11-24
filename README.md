@@ -196,6 +196,31 @@ $ python main.py --mode test_brats --dataset BRATS --crop_size 256 --image_size 
 $ python brats_auc.py
 ```
 
+Evluation
+
+```bash
+python main.py --mode test --dataset PCam --crop_size 96 --image_size 96 --c_dim 1                  --image_dir data/pcam                  --sample_dir pcam/samples                  --log_dir pcam/logs                  --model_save_dir pcam/models  --result_dir pcam/results                  --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000 --test_iters 1660000 --eval_dataset train --eval_resnet_name pcam_resnet.ckpt
+```
+
+```bash
+python main.py --mode test --dataset PCam --crop_size 96 --image_size 96 --c_dim 1                  --image_dir data/pcam                  --sample_dir pcam/samples                  --log_dir pcam/logs                  --model_save_dir pcam/models                  --result_dir pcam/results                  --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000 --test_iters 1660000 --eval_dataset default --eval_resnet_name pcam_resnet.ckpt
+```
+
+```bash
+python main.py --mode test --dataset CelebA --image_size 128 --c_dim 8                  --sample_dir celeba/samples                  --log_dir celeba/logs                  --model_save_dir celeba/models                  --result_dir celeba/results                  --selected_attrs Eyeglasses Bags_Under_Eyes Bushy_Eyebrows Arched_Eyebrows Narrow_Eyes Smiling Young Male  --lambda_id 5                  --test_iters 5500000 --eval_dataset default --eval_resnet_name celeba_resnet.ckpt
+```
+
+```bash
+python main.py --mode test --dataset CelebA --image_size 128 --c_dim 8                  --sample_dir celeba/samples                  --log_dir celeba/logs                  --model_save_dir celeba/models                  --result_dir celeba/results                  --selected_attrs Eyeglasses Bags_Under_Eyes Bushy_Eyebrows Arched_Eyebrows Narrow_Eyes Smiling Young Male  --lambda_id 5                  --test_iters 5500000 --eval_dataset train --eval_resnet_name celeba_resnet.ckpt
+```
+
+
+
+
+
+
+
+
 ### 6. Calculating FID (EXPERIMENTAL, only for PCam)
 See the official [FID implementation](https://github.com/bioinf-jku/TTUR) for more information.
 

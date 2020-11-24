@@ -11,7 +11,6 @@ import numpy as np
 import os
 import time
 import datetime
-from tqdm import tqdm
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from cv2 import cv2
@@ -74,14 +73,7 @@ class Solver(object):
 
         # Test configurations.
         self.test_iters = config.test_iters
-        self.include_source = config.include_source
-        self.single_image_output = config.single_image_output
-  
-        if self.single_image_output == True:
-          self.include_source = False
-
-        self.random_target = config.random_target
-        self.random_target_class = config.random_target_class
+        self.eval_resnet_name = config.eval_resnet_name
 
         # Miscellaneous.
         self.use_tensorboard = config.use_tensorboard
@@ -142,7 +134,7 @@ class Solver(object):
         print("The number of parameters: {}".format(num_params))
 
 
-    def restore_model_resnet(self, name = 'celeba_resnet.ckpt'):
+    def restore_model_resnet(self, name):
         print('Loading the resenet model')
         res_path = os.path.join(self.model_save_dir, name)
         print(res_path)
@@ -251,40 +243,22 @@ class Solver(object):
                 if attr_name in ['Black_Hair', 'Blond_Hair', 'Brown_Hair', 'Gray_Hair']:
                     hair_color_indices.append(i)
 
-        # Note that we may select multiple hair colors from the origin, but the target will 
-        # always choose at most one hair color (it seems that Gray_Hair has highest priority)
-        # Actually, it seems that all are added one after another, each one gets its own 
-        # iteration of "i" if it is one of the selected attributes.
         c_trg_list = []
         for i in range(c_dim):
             if dataset in ['CelebA']:
                 c_trg = c_org.clone()
                 if i in hair_color_indices:  # Set one hair color to 1 and the rest to 0.
-                    c_trg[:, i] = 1 # the rows represent data units in the batch
+                    c_trg[:, i] = 1
                     for j in hair_color_indices:
                         if j != i:
                             c_trg[:, j] = 0
                 else:
-                    # only do if dataset.attr2idx(random_target_class) == i 
-                    # AND random_target is not None.
-                    if self.random_target_class is not None and self.data_loader.dataset.label_attr2idx[self.random_target_class] == i and self.random_target is not None:
-                      # for each element in batch, choose random outcome between 0 and 1.
-                      # c_dim == 1 means "i" is the only attribute, i.e only column.
-                      # we only do this when we have 1 attribute; when multiple attributes 
-                      # are present, we would need to supply a list of probabilities, one 
-                      # for each attribute.
-                      # NOTE: c_org.shape[0] is the actual size of the batch, which is <= self.batch_size
-                      c_trg[:, i] = torch.tensor(np.random.binomial(1, self.random_target, c_org.shape[0]))
-                    else:
-                      c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
+                    c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
             elif dataset in ['BRATS', 'PCam']:
-              c_trg = c_org.clone()
-              if c_dim == 1 and self.random_target is not None:
-                c_trg[:, i] = torch.tensor(np.random.binomial(1, self.random_target, c_org.shape[0]))
-              else:
+                c_trg = c_org.clone()
                 c_trg[:, i] = (c_trg[:, i] == 0)  # Reverse attribute value.
             elif dataset == 'Directory':
-              c_trg = self.label2onehot(torch.ones(c_org.size(0))*i, c_dim)
+                c_trg = self.label2onehot(torch.ones(c_org.size(0))*i, c_dim)
 
             c_trg_list.append(c_trg.to(self.device))
         return c_trg_list
@@ -447,7 +421,8 @@ class Solver(object):
 
                 if self.use_tensorboard:
                     for tag, value in loss.items():
-                        self.logger.scalar_summary(tag, value, i+1)
+                        print(tag, value, i+1)
+                        #self.logger.scalar_summary(tag, value, i+1)
 
             # Translate fixed images for debugging.
             if (i+1) % self.sample_step == 0:
@@ -487,36 +462,22 @@ class Solver(object):
             data_loader = self.data_loader
         
         with torch.no_grad():
-            for i, (x_real, c_org) in tqdm(enumerate(data_loader), desc="Generating images", total=len(data_loader)): # (origin image, origin class)
+            for i, (x_real, c_org) in enumerate(data_loader):
 
                 # Prepare input images and target domain labels.
                 x_real = x_real.to(self.device)
-
-                c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs) # target class list
-
-                x_fake_list = []
-
-                if self.include_source:
-                  x_fake_list = [x_real]
+                c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
 
                 # Translate images.
+                x_fake_list = [x_real]
                 for c_trg in c_trg_list:
                     x_fake_list.append(torch.tanh(x_real + self.G(x_real, c_trg)))
 
-
                 # Save the translated images.
-                
-                if self.single_image_output:
-                  x_concat = torch.cat(x_fake_list, dim=3) # merge all in batch into one image
-                  for j in range(c_org.shape[0]):
-                    result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i*self.batch_size+j+1))
-                    save_image(self.denorm(x_concat[j].data.cpu()), result_path, nrow=1, padding=0)
-                    print('Saved real and fake images into {}...'.format(result_path))
-                else:
-                  x_concat = torch.cat(x_fake_list, dim=3) # merge all in batch into one image
-                  result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
-                  save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
-                  print('Saved real and fake images into {}...'.format(result_path))
+                x_concat = torch.cat(x_fake_list, dim=3)
+                result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
+                print('Saved real and fake images into {}...'.format(result_path))
 
 
 
@@ -584,42 +545,55 @@ class Solver(object):
 
     def test_pcam(self):
 
+
+
         """Translate images using Fixed-Point GAN trained on a single dataset."""
         # Load the trained generator.
         self.restore_model(self.test_iters)
+        self.restore_model_resnet(self.eval_resnet_name)
+
         
         # Set data loader.
         if self.dataset in ['PCam', 'CelebA']:
             data_loader = self.data_loader
 
+        y_test = torch.zeros(0)
+        y_pred = torch.zeros(0)    
+        
         with torch.no_grad():
             for i, (x_real, c_org) in enumerate(data_loader):
                 x_real = x_real.to(self.device)
-
+                x_real_tilde = x_real.clone()
+                x_real_tilde = x_real_tilde.to(self.device)
                 c_trg = c_org.clone()
-                #c_trg[:, 0] = 0 # always to healthy
-
                 c_trg_list = [c_trg.to(self.device)]
-              
               
                 # Translate images.
                 x_fake_list = [x_real]
                 for c_trg in c_trg_list:
-                    
-                    
+                                        
                     # settings
                     h, w = 0, 0        # for raster image
-                    nrows, ncols = 32, 6  # array of sub-plots
-
+                    nrows, ncols = len(c_trg), 9  # array of sub-plots
 
                     my_dpi = 96
              
-                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(646/my_dpi, 3456/my_dpi), dpi=my_dpi)
+                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(972/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
 
-                    def heatmap(img):
-                        img = np.array(img) 
-                        gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                        return gray_img
+                    def get_grey_image(image):
+                        image = np.array(image) 
+                        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                        return gray_image
+
+                                                
+                    def get_prediction_image(image, v):
+                        image = np.array(image) 
+                        # Fill image with color
+                        if v == 1:
+                            image[:] = (0, 200, 0)
+                        else:
+                            image[:] = (200, 0, 0)
+                        return image
 
                     c_trg_tilde = (~c_trg.bool()).float()
                     for index, c in enumerate(c_trg):
@@ -641,6 +615,8 @@ class Solver(object):
                         generated_tilde_class_image = torch.tanh(delta_tilde[index] + x_real[index])
                         generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
 
+                        x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
+
                         difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
                         difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
                         difference_generated_image = np.abs(generated_correct_class_image - generated_tilde_class_image)
@@ -653,6 +629,8 @@ class Solver(object):
                         ax_col_four = axi[index * ncols+3]
                         ax_col_five = axi[index * ncols+4]
                         ax_col_six = axi[index * ncols+5]
+                        ax_col_seven = axi[index * ncols+6]       
+                        ax_col_eight = axi[index * ncols+7]
 
                         input_image = transforms.ToPILImage()(input_image).convert("RGB")
                         generated_correct_class_image = transforms.ToPILImage()(generated_correct_class_image).convert("RGB")
@@ -664,16 +642,13 @@ class Solver(object):
                         ax_col_one.imshow(input_image, aspect='equal')
                         ax_col_two.imshow(generated_correct_class_image, aspect='equal')
                         ax_col_three.imshow(generated_tilde_class_image, aspect='equal')
-                        ax_col_four.imshow(heatmap(difference_real_generated_image), aspect='equal', cmap='jet')
-                        ax_col_five.imshow(heatmap(difference_real_generated_tilde_image), aspect='equal', cmap='jet')
-                        ax_col_six.imshow(heatmap(difference_generated_image), aspect='equal', cmap='jet')
+                        ax_col_four.imshow(get_grey_image(difference_real_generated_image), aspect='equal', cmap='jet')
+                        ax_col_five.imshow(get_grey_image(difference_real_generated_tilde_image), aspect='equal', cmap='jet')
+                        ax_col_six.imshow(get_grey_image(difference_generated_image), aspect='equal', cmap='jet')
+                        ax_col_seven.imshow(difference_real_generated_image, aspect='equal')
+                        ax_col_eight.imshow(difference_real_generated_tilde_image, aspect='equal')
 
-                        ax_col_one.text(4,10, c, color='white', va="center", backgroundcolor='black')
-                        #ax_col_two.text(4,15,'G({})'.format(c), color='white', backgroundcolor='black')
-                        #ax_col_three.text(4,15,'G({})'.format(c_tilde), color='white', backgroundcolor='black')
-                        #ax_col_four.text(4,15,'{}-G({})'.format(c, c), color='black', backgroundcolor='white')
-                        #ax_col_five.text(4,15,'{}-G({})'.format(c, c_tilde), color='black', backgroundcolor='white')
-                        #ax_col_six.text(4,15,'G({})-G({})'.format(c, c_tilde), color='black', backgroundcolor='white')
+                        ax_col_one.text(4,5, c, color='white', va="center", backgroundcolor='black')
 
                         ax_col_one.set_axis_off()
                         ax_col_two.set_axis_off()
@@ -681,24 +656,41 @@ class Solver(object):
                         ax_col_four.set_axis_off()
                         ax_col_five.set_axis_off()
                         ax_col_six.set_axis_off()
+                        ax_col_seven.set_axis_off()
+                        ax_col_eight.set_axis_off()
 
-                        result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c))
+                        result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
                         if not os.path.exists(result_generated_path):
                             os.makedirs(result_generated_path)  
 
-                        result_generated_path = os.path.join(result_generated_path, '{}_{}-images.jpg'.format(i+1, index+1))
-    
-                        #save_image(self.denorm((torch.tanh(delta[index] + x_real[index])).data.cpu()), result_generated_path, nrow=1, padding=0)
+                        result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
+                        generated_tilde_class_image.save(result_generated_path) 
+                        #save_image(self.denorm(torch.tanh(delta_tilde[index] + x_real[index]).data.cpu()), result_generated_path, nrow=1, padding=0)
 
+                    resnet_output = self.resnet(x_real_tilde.to("cpu")).to(self.device)
+                    predictions = resnet_output >= 0.5
+                    abs_diff = abs(predictions.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
+                    for index, c in enumerate(c_trg[:, 0]):
+                        axi = ax.flat      
+                        ax_col_nine = axi[index * ncols+8]
+                        if abs_diff[index].item() == 1:
+                            ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                        else:
+                            ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                        ax_col_nine.set_axis_off()
+
+                    y_test = torch.cat([y_test, c_trg[:, :1].to("cpu").int()], 0)
+                    y_pred = torch.cat([y_pred, predictions.to("cpu").int()], 0)
+                    cm = metrics.confusion_matrix(y_test, y_pred)
+                    self.confusion_metrics(cm)                    
+                    print('Saving image {}'.format(i+1))
                     plt.tight_layout(True)
                     plt.gca().set_axis_off()
-                    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, 
-                                hspace = 0, wspace = 0)
+                    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
                     plt.margins(0,0)
                     result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
                     plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
-                    plt.clf()
-                    #plt.show()
+                    plt.close()
                     
 
                 # Save the translated images.
@@ -714,7 +706,7 @@ class Solver(object):
         """Translate images using Fixed-Point GAN trained on a single dataset."""
         # Load the trained generator.
         self.restore_model(self.test_iters)
-        self.restore_model_resnet('celeba_resnet.ckpt')
+        self.restore_model_resnet(self.eval_resnet_name)
 
         # Set data loader.
         if self.dataset in ['PCam', 'CelebA']:
@@ -862,13 +854,12 @@ class Solver(object):
                     # plt.show()
 
 
-    def test_celeba2(self):
+    def test_celeba_multi(self):
 
             """Translate images using Fixed-Point GAN trained on a single dataset."""
             # Load the trained generator.
             self.restore_model(self.test_iters)
-
-            self.restore_model_resnet('celeba_resnet.ckpt')
+            self.restore_model_resnet(self.eval_resnet_name)
             
             # Set data loader.
             if self.dataset in ['PCam', 'CelebA']:
