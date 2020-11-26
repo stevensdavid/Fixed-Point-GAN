@@ -7,29 +7,30 @@ import os
 import random
 from glob import glob
 import h5py
-import numpy as np
 
 
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
 
-    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, all_data):
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, eval_datset):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
         self.attr_path = attr_path
         self.selected_attrs = selected_attrs
         self.transform = transform
         self.mode = mode
-        self.all_data = all_data
         self.train_dataset = []
         self.test_dataset = []
         self.attr2idx = {}
-        self.label_attr2idx = {}
         self.idx2attr = {}
         self.preprocess()
+        self.eval_datset = eval_datset
 
-        if mode == 'train':
+
+
+        if mode == 'train' or eval_datset == 'train':
             self.num_images = len(self.train_dataset)
+            print(self.num_images)
         else:
             self.num_images = len(self.test_dataset)
 
@@ -42,14 +43,7 @@ class CelebA(data.Dataset):
             self.idx2attr[i] = attr_name
 
         lines = lines[2:]
-        
-        # very odd that they seem to shuffle the attribute file, 
-        # now the filenames will not appear in order when you fetch them.
-        # actually, since the filename is paired with the label, this is 
-        # perfectly fine -- it just shuffles the input in a reproducible 
-        # manner (see __getitem__, which returns the matching image for a 
-        # label).
-        random.seed(1234) 
+        random.seed(1234)
         random.shuffle(lines)
         for i, line in enumerate(lines):
             split = line.split()
@@ -59,21 +53,18 @@ class CelebA(data.Dataset):
             label = []
             for attr_name in self.selected_attrs:
                 idx = self.attr2idx[attr_name]
-                self.label_attr2idx[attr_name] = len(label)
                 label.append(values[idx] == '1')
 
             if (i+1) < 2000:
                 self.test_dataset.append([filename, label])
             else:
-                if self.all_data == True:
-                  self.test_dataset.append([filename, label])
                 self.train_dataset.append([filename, label])
 
         print('Finished preprocessing the CelebA dataset...')
 
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
-        dataset = self.train_dataset if self.mode == 'train' else self.test_dataset
+        dataset = self.train_dataset if (self.mode == 'train' or self.eval_datset == 'train') else self.test_dataset
         filename, label = dataset[index]
         image = Image.open(os.path.join(self.image_dir, filename))
         return self.transform(image), torch.FloatTensor(label)
@@ -141,9 +132,9 @@ class BRATS_SYN(data.Dataset):
 class PCam(data.Dataset):
     """Dataset class for the PatchCamelyon dataset."""
 
-    def __init__(self, image_dir, transform, mode):
+    def __init__(self, image_dir, transform, mode, eval_datset):
         """Initialize and Load the PCam dataset."""
-        if mode not in ("train", "test", "val"):
+        if mode not in ("train", "test", "val", "generate_dataset"):
             raise ValueError(f"Support modes are train, test and val, received: {mode}")
         self.image_dir = image_dir
         self.transform = transform
@@ -152,6 +143,7 @@ class PCam(data.Dataset):
         self.y_file = None
         self.num_images = None
         self.load_data()
+        self.eval_datset = eval_datset
 
     def load_data(self):
         """Load PCam dataset"""
@@ -192,40 +184,41 @@ class PCam(data.Dataset):
 
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
-               batch_size=16, dataset='CelebA', mode='train', all_data=False, num_workers=1,
-               normalize=True):
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1, eval_datset = None):
+
+    if eval_datset is None:
+        eval_datset = mode
+
     """Build and return a data loader."""
     transform = []
     if mode == 'train':
         transform.append(T.RandomHorizontalFlip())
     transform.append(T.CenterCrop(crop_size))
     transform.append(T.Resize(image_size))
-    
-    if normalize:
-      transform.append(T.ToTensor())
-      transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
-    else:
-      class ToTensorWithoutScaling(object):
-        """H x W x C -> C x H x W"""
-        def __call__(self, image):
-          return torch.ByteTensor(np.array(image)).permute(2, 0, 1).float()
-      transform.append(ToTensorWithoutScaling())
+    transform.append(T.ToTensor())
+    transform.append(T.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
     transform = T.Compose(transform)
 
+    print("dataset", dataset)
+
     if dataset == 'CelebA':
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, all_data)
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, eval_datset)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
-        dataset = PCam(image_dir, transform, mode)
-    
-    elif dataset == 'Directory':
+        dataset = PCam(image_dir, transform, mode, eval_datset)
+    elif dataset == 'Directory' or dataset == 'Dogs':
+        image_dir = 'data/dogs'
         dataset = ImageFolder(image_dir, transform)
+
 
     data_loader = data.DataLoader(dataset=dataset,
                                   batch_size=batch_size,
                                   shuffle=(mode=='train'),
                                   num_workers=num_workers)
+
+    print(data_loader)                              
+                                  
     return data_loader
 
 if __name__ == "__main__":

@@ -73,7 +73,10 @@ class Solver(object):
 
         # Test configurations.
         self.test_iters = config.test_iters
-        self.eval_resnet_name = config.eval_resnet_name
+        self.eval_resnet_id_name = config.eval_resnet_id_name
+        self.eval_resnet_tilde_name = config.eval_resnet_tilde_name
+        self.eval_dataset = config.eval_dataset
+
 
         # Miscellaneous.
         self.use_tensorboard = config.use_tensorboard
@@ -134,13 +137,21 @@ class Solver(object):
         print("The number of parameters: {}".format(num_params))
 
 
-    def restore_model_resnet(self, name):
-        print('Loading the resenet model')
+    def restore_model_tilde_resnet(self, name):
+        print('Loading the tilde resenet model')
         res_path = os.path.join(self.model_save_dir, name)
         print(res_path)
-        self.resnet = ResNet(num_classes=1)
-        self.resnet.load_state_dict(torch.load(res_path),strict=False)
-        self.resnet.eval()
+        self.resnet_tilde = ResNet(num_classes=1)
+        self.resnet_tilde.load_state_dict(torch.load(res_path),strict=False)
+        self.resnet_tilde.eval()
+
+    def restore_model_id_resnet(self, name):
+        print('Loading the id resenet model')
+        res_path = os.path.join(self.model_save_dir, name)
+        print(res_path)
+        self.resnet_id = ResNet(num_classes=1)
+        self.resnet_id.load_state_dict(torch.load(res_path),strict=False)
+        self.resnet_id.eval()
 
     def restore_model(self, resume_iters):
         """Restore the trained generator and discriminator."""
@@ -178,7 +189,7 @@ class Solver(object):
         return out.clamp_(-0.5, 5)
 
 
-    def confusion_metrics (self, conf_matrix):
+    def confusion_metrics (self, conf_matrix, name):
         
         # save confusion matrix and slice into four pieces    
         TP = conf_matrix[1][1]
@@ -186,10 +197,14 @@ class Solver(object):
         FP = conf_matrix[0][1]
         FN = conf_matrix[1][0]   
 
-        print('True Positives:', TP)
-        print('True Negatives:', TN)
-        print('False Positives:', FP)
-        print('False Negatives:', FN)
+  
+
+        metrics = []
+
+        metrics.append(('{} {}'.format('True Positives:', TP)))
+        metrics.append(('{} {}'.format('True Negatives:', TN)))
+        metrics.append(('{} {}'.format('False Positives:', FP)))
+        metrics.append(('{} {}'.format('False Negatives:', FN)))
         
         # calculate accuracy
         conf_accuracy = (float (TP+TN) / float(TP + TN + FP + FN))
@@ -205,13 +220,23 @@ class Solver(object):
         conf_precision = (TN / float(TN + FP))    # calculate f_1 score
         conf_f1 = 2 * ((conf_precision * conf_sensitivity) / (conf_precision + conf_sensitivity))    
 
-        print('-'*50)
-        print(f'Accuracy: {round(conf_accuracy,2)}') 
-        print(f'Mis-Classification: {round(conf_misclassification,2)}') 
-        print(f'Sensitivity: {round(conf_sensitivity,2)}') 
-        print(f'Specificity: {round(conf_specificity,2)}') 
-        print(f'Precision: {round(conf_precision,2)}')
-        print(f'f_1 Score: {round(conf_f1,2)}')    
+
+        metrics.append('-'*50)
+        metrics.append(f'Accuracy: {round(conf_accuracy,2)}')
+        metrics.append(f'Mis-Classification: {round(conf_misclassification,2)}')
+        metrics.append(f'Sensitivity: {round(conf_sensitivity,2)}')
+        metrics.append(f'Specificity: {round(conf_specificity,2)}')
+        metrics.append(f'Precision: {round(conf_precision,2)}')
+        metrics.append(f'f_1 Score: {round(conf_f1,2)}')
+
+        result_metrics_path = os.path.join(self.result_dir,  '{}-metrics.txt'.format(name))
+        metrics = '\n'.join(map(str, metrics)) 
+
+        f = open(result_metrics_path, "w")
+        f.write(metrics)
+        f.close()
+
+        
 
     def gradient_penalty(self, y, x):
         """Compute gradient penalty: (L2_norm(dy/dx) - 1)**2."""
@@ -471,9 +496,10 @@ class Solver(object):
                 # Translate images.
                 x_fake_list = [x_real]
                 for c_trg in c_trg_list:
+                    print("c_trg_tilde", x_real.size(), c_trg)
                     x_fake_list.append(torch.tanh(x_real + self.G(x_real, c_trg)))
 
-                # Save the translated images.
+                # Save the translated images.c
                 x_concat = torch.cat(x_fake_list, dim=3)
                 result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
                 save_image(self.denorm(x_concat.data.cpu()), result_path, nrow=1, padding=0)
@@ -545,26 +571,32 @@ class Solver(object):
 
     def test_pcam(self):
 
-
-
         """Translate images using Fixed-Point GAN trained on a single dataset."""
         # Load the trained generator.
         self.restore_model(self.test_iters)
-        self.restore_model_resnet(self.eval_resnet_name)
+        self.restore_model_id_resnet(self.eval_resnet_id_name)
+        self.restore_model_tilde_resnet(self.eval_resnet_tilde_name)
 
         
         # Set data loader.
         if self.dataset in ['PCam', 'CelebA']:
             data_loader = self.data_loader
 
-        y_test = torch.zeros(0)
-        y_pred = torch.zeros(0)    
+        y_test_id = torch.zeros(0)
+        y_pred_id = torch.zeros(0)  
+
+        y_test_tilde = torch.zeros(0)
+        y_pred_tilde = torch.zeros(0)  
+
+        input_image = None    
         
         with torch.no_grad():
             for i, (x_real, c_org) in enumerate(data_loader):
                 x_real = x_real.to(self.device)
                 x_real_tilde = x_real.clone()
                 x_real_tilde = x_real_tilde.to(self.device)
+                x_real_id = x_real.clone()
+                x_real_id = x_real_id.to(self.device)
                 c_trg = c_org.clone()
                 c_trg_list = [c_trg.to(self.device)]
               
@@ -574,11 +606,11 @@ class Solver(object):
                                         
                     # settings
                     h, w = 0, 0        # for raster image
-                    nrows, ncols = len(c_trg), 9  # array of sub-plots
+                    nrows, ncols = len(c_trg), 10  # array of sub-plots
 
                     my_dpi = 96
              
-                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(972/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
+                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(1078/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
 
                     def get_grey_image(image):
                         image = np.array(image) 
@@ -610,12 +642,12 @@ class Solver(object):
                         delta = self.G(x_real, c_trg)
                         generated_correct_class_image = torch.tanh(delta[index] + x_real[index])
                         generated_correct_class_image = self.denorm(generated_correct_class_image.data.cpu())
+                        x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
 
                         delta_tilde = self.G(x_real, c_trg_tilde)
                         generated_tilde_class_image = torch.tanh(delta_tilde[index] + x_real[index])
                         generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
-
-                        x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
+                        x_real_id[index] = self.norm(generated_tilde_class_image.data.cpu())
 
                         difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
                         difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
@@ -659,17 +691,21 @@ class Solver(object):
                         ax_col_seven.set_axis_off()
                         ax_col_eight.set_axis_off()
 
-                        result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
-                        if not os.path.exists(result_generated_path):
-                            os.makedirs(result_generated_path)  
+                        #result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
+                        #if not os.path.exists(result_generated_path):
+                            #os.makedirs(result_generated_path)  
 
-                        result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
-                        generated_tilde_class_image.save(result_generated_path) 
+                        #result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
+                        #generated_tilde_class_image.save(result_generated_path) 
                         #save_image(self.denorm(torch.tanh(delta_tilde[index] + x_real[index]).data.cpu()), result_generated_path, nrow=1, padding=0)
 
-                    resnet_output = self.resnet(x_real_tilde.to("cpu")).to(self.device)
-                    predictions = resnet_output >= 0.5
-                    abs_diff = abs(predictions.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
+
+
+
+
+                    resnet_output_tilde = self.resnet_tilde(x_real_tilde.to("cpu")).to(self.device)
+                    predictions_tilde = resnet_output_tilde >= 0.5
+                    abs_diff = abs(predictions_tilde.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
                     for index, c in enumerate(c_trg[:, 0]):
                         axi = ax.flat      
                         ax_col_nine = axi[index * ncols+8]
@@ -679,10 +715,28 @@ class Solver(object):
                             ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
                         ax_col_nine.set_axis_off()
 
-                    y_test = torch.cat([y_test, c_trg[:, :1].to("cpu").int()], 0)
-                    y_pred = torch.cat([y_pred, predictions.to("cpu").int()], 0)
-                    cm = metrics.confusion_matrix(y_test, y_pred)
-                    self.confusion_metrics(cm)                    
+                    y_test_tilde = torch.cat([y_test_tilde, c_trg[:, :1].to("cpu").int()], 0)
+                    y_pred_tilde = torch.cat([y_pred_tilde, predictions_tilde.to("cpu").int()], 0)
+                    cm_tilde = metrics.confusion_matrix(y_test_tilde, y_pred_tilde)
+                    self.confusion_metrics(cm_tilde, 'tilde')
+
+                    resnet_output_id = self.resnet_id(x_real_id.to("cpu")).to(self.device)
+                    predictions_id = resnet_output_id >= 0.5
+                    abs_diff = abs(predictions_id.to("cpu").float() - c_trg[:, :1].to("cpu").float())
+                    for index, c in enumerate(c_trg[:, 0]):
+                        axi = ax.flat      
+                        ax_col_ten = axi[index * ncols+9]
+                        if abs_diff[index].item() == 1:
+                            ax_col_ten.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                        else:
+                            ax_col_ten.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                        ax_col_ten.set_axis_off()
+
+                    y_test_id = torch.cat([y_test_id, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                    y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
+                    cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
+                    self.confusion_metrics(cm_id, 'id')
+                    
                     print('Saving image {}'.format(i+1))
                     plt.tight_layout(True)
                     plt.gca().set_axis_off()
@@ -706,39 +760,66 @@ class Solver(object):
         """Translate images using Fixed-Point GAN trained on a single dataset."""
         # Load the trained generator.
         self.restore_model(self.test_iters)
-        self.restore_model_resnet(self.eval_resnet_name)
+        self.restore_model_id_resnet(self.eval_resnet_id_name)
+        self.restore_model_tilde_resnet(self.eval_resnet_tilde_name)
 
         # Set data loader.
         if self.dataset in ['PCam', 'CelebA']:
             data_loader = self.data_loader
 
-        y_test = torch.zeros(0)
-        y_pred = torch.zeros(0)    
+        y_test_tilde = torch.zeros(0)
+        y_pred_tilde = torch.zeros(0)  
+        y_test_id = torch.zeros(0)
+        y_pred_id = torch.zeros(0)  
+
+        input_image = None   
         
         with torch.no_grad():
             for i, (x_real, c_org) in enumerate(data_loader):
                 x_real = x_real.to(self.device)
                 x_real_tilde = x_real.clone()
                 x_real_tilde = x_real_tilde.to(self.device)
+                x_real_id = x_real.clone()
+                x_real_id = x_real_id.to(self.device)
                 c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
 
                 c_trg = c_org.clone()
                 #c_trg[:, 0] = 0 # always to healthy
                 
               
-              
                 # Translate images.
                 x_fake_list = [x_real]
                 for c_trg in c_trg_list:
+
+                    c_trg_tilde = (~c_trg.bool()).float()
+
+                    if self.eval_dataset == 'train':
+                            resnet_output_tilde = self.resnet_tilde(x_real.to("cpu")).to(self.device)
+                            predictions_tilde = resnet_output_tilde >= 0.5
+                            y_test_tilde = torch.cat([y_test_tilde, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                            y_pred_tilde = torch.cat([y_pred_tilde, predictions_tilde.to("cpu").int()], 0)
+                            cm_tilde = metrics.confusion_matrix(y_test_tilde, y_pred_tilde)
+                            self.confusion_metrics(cm_tilde, 'train-tilde')
+
+                            resnet_output_id = self.resnet_id(x_real.to("cpu")).to(self.device)
+                            predictions_id = resnet_output_id >= 0.5
+                            y_test_id = torch.cat([y_test_id, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                            y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
+                            cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
+                            self.confusion_metrics(cm_id, 'train-id')
+
+                            print('{}%'.format(100* (i/len(data_loader))))
+
+                            continue  
                                         
                     # settings
                     h, w = 0, 0        # for raster image
-                    nrows, ncols = len(c_trg), 9  # array of sub-plots
+                    nrows, ncols = len(c_trg), 10  # array of sub-plots
 
 
                     my_dpi = 96
              
-                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(972/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
+                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(1078/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
 
                     def get_grey_image(image):
                         image = np.array(image) 
@@ -754,10 +835,14 @@ class Solver(object):
                         else:
                             image[:] = (200, 0, 0)
                         return image
+   
 
-                    c_trg_tilde = (~c_trg.bool()).float()
+                  
+
                     for index, c in enumerate(c_trg):
                         # Save generated Tilde image
+
+                        
 
                         c = c.bool()
                         c_tilde = ~c
@@ -771,11 +856,13 @@ class Solver(object):
                         generated_correct_class_image = torch.tanh(delta[index] + x_real[index])
                         generated_correct_class_image = self.denorm(generated_correct_class_image.data.cpu())
 
+                        x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
+
+
                         delta_tilde = self.G(x_real, c_trg_tilde)
                         generated_tilde_class_image = torch.tanh(delta_tilde[index] + x_real[index])
                         generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
-
-                        x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
+                        x_real_id[index] = self.norm(generated_tilde_class_image.data.cpu())
 
                         difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
                         difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
@@ -819,39 +906,61 @@ class Solver(object):
                         ax_col_seven.set_axis_off()
                         ax_col_eight.set_axis_off()
 
-                        result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
-                        if not os.path.exists(result_generated_path):
-                            os.makedirs(result_generated_path)  
+                        #result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
+                        #if not os.path.exists(result_generated_path):
+                        #    os.makedirs(result_generated_path)  
 
-                        result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
-                        generated_tilde_class_image.save(result_generated_path) 
+                        #result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
+                        #generated_tilde_class_image.save(result_generated_path) 
                         #save_image(self.denorm(torch.tanh(delta_tilde[index] + x_real[index]).data.cpu()), result_generated_path, nrow=1, padding=0)
 
-                    resnet_output = self.resnet(x_real_tilde.to("cpu")).to(self.device)
-                    predictions = resnet_output >= 0.5
-                    abs_diff = abs(predictions.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
-                    for index, c in enumerate(c_trg[:, 0]):
-                        axi = ax.flat      
-                        ax_col_nine = axi[index * ncols+8]
-                        if abs_diff[index].item() == 1:
-                            ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
-                        else:
-                            ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
-                        ax_col_nine.set_axis_off()
+                    if input_image is not None:
+                        resnet_output_tilde = self.resnet_tilde(x_real_tilde.to("cpu")).to(self.device)
+                        predictions_tilde = resnet_output_tilde >= 0.5
+                        abs_diff = abs(predictions_tilde.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
+                        for index, c in enumerate(c_trg[:, 0]):
+                            axi = ax.flat      
+                            ax_col_nine = axi[index * ncols+8]
+                            if abs_diff[index].item() == 1:
+                                ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                            else:
+                                ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                            ax_col_nine.set_axis_off()
 
-                    y_test = torch.cat([y_test, c_trg[:, :1].to("cpu").int()], 0)
-                    y_pred = torch.cat([y_pred, predictions.to("cpu").int()], 0)
-                    cm = metrics.confusion_matrix(y_test, y_pred)
-                    self.confusion_metrics(cm)                    
-                    print('Saving image {}'.format(i+1))
-                    plt.tight_layout(True)
-                    plt.gca().set_axis_off()
-                    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
-                    plt.margins(0,0)
-                    result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
-                    plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
-                    plt.close()
-                    # plt.show()
+                        y_test_tilde = torch.cat([y_test_tilde, c_trg[:, :1].to("cpu").int()], 0)
+                        y_pred_tilde = torch.cat([y_pred_tilde, predictions_tilde.to("cpu").int()], 0)
+                        cm_tilde = metrics.confusion_matrix(y_test_tilde, y_pred_tilde)
+                        self.confusion_metrics(cm_tilde, 'tilde')
+
+                        resnet_output_id = self.resnet_id(x_real_id.to("cpu")).to(self.device)
+                        predictions_id = resnet_output_id >= 0.5
+                        abs_diff = abs(predictions_id.to("cpu").float() - c_trg[:, :1].to("cpu").float())
+                        for index, c in enumerate(c_trg[:, 0]):
+                            axi = ax.flat      
+                            ax_col_ten = axi[index * ncols+9]
+                            if abs_diff[index].item() == 1:
+                                ax_col_ten.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                            else:
+                                ax_col_ten.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                            ax_col_ten.set_axis_off()
+
+                        y_test_id = torch.cat([y_test_id, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                        y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
+                        cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
+                        self.confusion_metrics(cm_id, 'id')    
+
+
+
+                        print('Saving image {}'.format(i+1))
+                        plt.tight_layout(True)
+                        plt.gca().set_axis_off()
+                        plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
+                        plt.margins(0,0)
+                        result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                        plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
+                        
+                        # plt.show()
+                    plt.close()    
 
 
     def test_celeba_multi(self):
@@ -859,44 +968,81 @@ class Solver(object):
             """Translate images using Fixed-Point GAN trained on a single dataset."""
             # Load the trained generator.
             self.restore_model(self.test_iters)
-            self.restore_model_resnet(self.eval_resnet_name)
-            
+            self.restore_model_id_resnet(self.eval_resnet_id_name)
+            self.restore_model_tilde_resnet(self.eval_resnet_tilde_name)
+
             # Set data loader.
             if self.dataset in ['PCam', 'CelebA']:
                 data_loader = self.data_loader  
 
-            y_test = torch.zeros(0)
-            y_pred = torch.zeros(0)
+            y_test_tilde = torch.zeros(0)
+            y_pred_tilde = torch.zeros(0)
+            y_test_id = torch.zeros(0)
+            y_pred_id = torch.zeros(0)
+
+            input_image = None   
 
             with torch.no_grad():
                 for i, (x_real, c_org) in enumerate(data_loader):
                     x_real_tilde = x_real.clone()
                     x_real_tilde = x_real_tilde.to(self.device)
+                    x_real_id = x_real.clone()
+                    x_real_id = x_real_id.to(self.device)
                     x_real = x_real.to(self.device)
                     c_trg_list = self.create_labels(c_org, self.c_dim, self.dataset, self.selected_attrs)
 
+                   
               
                     #print(pred)
 
                     # Translate images.
                     x_fake_list = [x_real]
-                    for c_index, c_trg in enumerate(c_trg_list):
-                        
+                    for c_index, c_trg in enumerate(c_trg_list):                        
                 
                         if c_index is not 0:
                             continue
 
-                        #c_trg = c_trg[:,0]
+                       
+
+                        # Tilde glasses only.
+                        c_trg_tilde = c_trg.clone()
+                        for c_trg_index, c_trg_t in enumerate(c_trg_tilde):
+                            for c_trg_index2, c_trg_2 in enumerate(c_trg_t):
+                                if c_trg_index2 == 0:
+                                    c_trg_tilde[c_trg_index][c_trg_index2] = (~c_trg_2.bool()).float()
+
+
+                        # Tilde everything
+                        #c_trg_tilde = (~c_trg.bool()).float()
+            
+                        if self.eval_dataset == 'train':
+                            resnet_output_tilde = self.resnet_tilde(x_real.to("cpu")).to(self.device)
+                            predictions_tilde = resnet_output_tilde >= 0.5
+                            y_test_tilde = torch.cat([y_test_tilde, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                            y_pred_tilde = torch.cat([y_pred_tilde, predictions_tilde.to("cpu").int()], 0)
+                            cm_tilde = metrics.confusion_matrix(y_test_tilde, y_pred_tilde)
+                            self.confusion_metrics(cm_tilde, 'train-tilde')
+
+                            resnet_output_id = self.resnet_id(x_real.to("cpu")).to(self.device)
+                            predictions_id = resnet_output_id >= 0.5
+                            y_test_id = torch.cat([y_test_id, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                            y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
+                            cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
+                            self.confusion_metrics(cm_id, 'train-id')
+
+                            print('{}%'.format(100* (i/len(data_loader))))
+
+                            continue  
                                     
                         # settings
                         h, w = 0, 0        # for raster image
-                        nrows, ncols = len(c_trg), 9  # array of sub-plots
+                        nrows, ncols = len(c_trg), 10  # array of sub-plots
 
                         #print(len(c_trg))
 
                         my_dpi = 96
                 
-                        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(970/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
+                        fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(1078/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
 
                         def get_grey_image(image):
                             image = np.array(image) 
@@ -913,28 +1059,13 @@ class Solver(object):
 
                             return image    
 
-                        # Tilde everything
-                        #c_trg_tilde = (~c_trg.bool()).float()
-
-
-                        # Tilde glasses only.
-                        c_trg_tilde = c_trg.clone()
-                        for c_trg_index, c_trg_t in enumerate(c_trg_tilde):
-                            for c_trg_index2, c_trg_2 in enumerate(c_trg_t):
-                                if c_trg_index2 == 0:
-                                    c_trg_tilde[c_trg_index][c_trg_index2] = (~c_trg_2.bool()).float()
-
-
-                        #print(c_trg - c_trg_tilde)
-                        #print(c_trg_tilde)
 
                         for index, c in enumerate(c_trg[:, 0]):
                             # Save generated Tilde image
 
                             input_image = self.denorm(x_real[index].data.cpu())
-
-                            delta = self.G(x_real, c_trg)
                             
+                            delta = self.G(x_real, c_trg)
                             delta_tilde = self.G(x_real, c_trg_tilde)
 
                             c = c.bool()
@@ -943,17 +1074,20 @@ class Solver(object):
                             c = int(c.item())
                             c_tilde = int(c_tilde.item())
 
+
                             generated_correct_class_image = torch.tanh(delta[index] + x_real[index])
                             generated_correct_class_image = self.denorm(generated_correct_class_image.data.cpu())
+                            x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
+
 
                             generated_tilde_class_image = torch.tanh(delta_tilde[index] + x_real[index])
                             generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
+                            x_real_id[index] = self.norm(generated_tilde_class_image.data.cpu())
 
-                            x_real_tilde[index] = self.norm(generated_correct_class_image.data.cpu())
-                            
                             difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
                             difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
                             difference_generated_image = np.abs(generated_correct_class_image - generated_tilde_class_image)
+
 
                             axi = ax.flat
 
@@ -994,37 +1128,56 @@ class Solver(object):
                             ax_col_seven.set_axis_off()
                             ax_col_eight.set_axis_off()
 
-                            result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
-                            if not os.path.exists(result_generated_path):
-                                os.makedirs(result_generated_path)  
+                            #result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
+                            #if not os.path.exists(result_generated_path):
+                            #    os.makedirs(result_generated_path)  
 
-                            result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
-                            generated_tilde_class_image.save(result_generated_path) 
+                            #result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
+                            #generated_tilde_class_image.save(result_generated_path) 
                             #save_image(self.denorm(torch.tanh(delta_tilde[index] + x_real[index]).data.cpu()), result_generated_path, nrow=1, padding=0)
 
-        
-                        resnet_output = self.resnet(x_real_tilde.to("cpu")).to(self.device)
-                        predictions = resnet_output >= 0.5
-                        abs_diff = abs(predictions.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
-                        for index, c in enumerate(c_trg[:, 0]):
-                            axi = ax.flat      
-                            ax_col_nine = axi[index * ncols+8]
-                            if abs_diff[index].item() == 1:
-                                ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
-                            else:
-                                ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
-                            ax_col_nine.set_axis_off()
-                        y_test = torch.cat([y_test, c_trg[:, :1].to("cpu").int()], 0)
-                        y_pred = torch.cat([y_pred, predictions.to("cpu").int()], 0)
-                        cm = metrics.confusion_matrix(y_test, y_pred)
-                        self.confusion_metrics(cm)
+                        if input_image is not None:
 
-                        print('Saving image {}'.format(i+1))
-                        plt.tight_layout(True)
-                        plt.gca().set_axis_off()
-                        plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
-                        plt.margins(0,0)
-                        result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
-                        plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
+                            resnet_output_tilde = self.resnet_tilde(x_real_tilde.to("cpu")).to(self.device)
+                            predictions_tilde = resnet_output_tilde >= 0.5
+                            abs_diff = abs(predictions_tilde.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
+                            for index, c in enumerate(c_trg[:, 0]):
+                                axi = ax.flat      
+                                ax_col_nine = axi[index * ncols+8]
+                                if abs_diff[index].item() == 1:
+                                    ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                                else:
+                                    ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                                ax_col_nine.set_axis_off()
+
+                            y_test_tilde = torch.cat([y_test_tilde, c_trg[:, :1].to("cpu").int()], 0)
+                            y_pred_tilde = torch.cat([y_pred_tilde, predictions_tilde.to("cpu").int()], 0)
+                            cm_tilde = metrics.confusion_matrix(y_test_tilde, y_pred_tilde)
+                            self.confusion_metrics(cm_tilde, 'tilde')
+
+                            resnet_output_id = self.resnet_id(x_real_id.to("cpu")).to(self.device)
+                            predictions_id = resnet_output_id >= 0.5
+                            abs_diff = abs(predictions_id.to("cpu").float() - c_trg[:, :1].to("cpu").float())
+                            for index, c in enumerate(c_trg[:, 0]):
+                                axi = ax.flat      
+                                ax_col_ten = axi[index * ncols+9]
+                                if abs_diff[index].item() == 1:
+                                    ax_col_ten.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                                else:
+                                    ax_col_ten.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                                ax_col_ten.set_axis_off()
+
+                            y_test_id = torch.cat([y_test_id, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                            y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
+                            cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
+                            self.confusion_metrics(cm_id, 'id')
+
+                            print('Saving image {}'.format(i+1))
+                            plt.tight_layout(True)
+                            plt.gca().set_axis_off()
+                            plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
+                            plt.margins(0,0)
+                            result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                            plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
                         plt.close()
-                        # plt.show()                    
+                            # plt.show()                    

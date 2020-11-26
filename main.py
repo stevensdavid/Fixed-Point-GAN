@@ -26,35 +26,21 @@ def main(config):
     data_loader = None
 
     if config.dataset in ['CelebA']:
-        if config.eval_dataset == 'default':
-            data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
+        data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
                                     config.crop_size, config.image_size, config.batch_size,
-                                    'CelebA', config.mode, config.num_workers)
-        else:
-            data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
-                                    config.crop_size, config.image_size, config.batch_size,
-                                    'CelebA', 'train', config.num_workers)                           
-
+                                    'CelebA', config.mode, config.num_workers, config.eval_dataset)
     elif config.dataset in ['PCam']:
-        if config.eval_dataset == 'default':
-            data_loader = get_loader(config.image_dir, None, None,
+        data_loader = get_loader(config.image_dir, None, None,
                                    config.crop_size, config.image_size, config.batch_size,
-                                   'PCam', config.mode, config.num_workers)
-        else:
-            data_loader = get_loader(config.image_dir, None, None,
-                                   config.crop_size, config.image_size, config.batch_size,
-                                   'PCam', 'train', config.num_workers)
-
+                                   'PCam', config.mode, config.num_workers, config.eval_dataset)
     elif config.dataset in ['BRATS']:
         data_loader = get_loader(config.image_dir, None, None,
                                    config.crop_size, config.image_size, config.batch_size,
-                                   'BRATS', config.mode, config.num_workers)
-
-
+                                   'BRATS', config.mode, config.num_workers,config.eval_dataset)
     elif config.dataset in ['Directory']:
         data_loader = get_loader(config.image_dir, None, None,
                                  config.crop_size, config.image_size, config.batch_size,
-                                 'Directory', config.mode, config.num_workers)
+                                 'Directory', config.mode, config.num_workers, config.eval_dataset)
 
         
     # Solver for training and testing Fixed-Point GAN.
@@ -71,7 +57,10 @@ def main(config):
         elif config.dataset in ['PCam']:
             solver.test_pcam()
         elif config.dataset in ['CelebA']:
-            solver.test_celeba_multi()
+            if config.c_dim > 1:
+                solver.test_celeba_multi()
+            else:
+                solver.test_celeba();    
     elif config.mode == 'test_brats':
         if config.dataset in ['BRATS']:
             solver.test_brats()
@@ -112,8 +101,9 @@ if __name__ == '__main__':
 
     # Test configuration.
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
-    parser.add_argument('--eval_resnet_name', type=str, default=200000, help='name of resnet in /models to load for evaluation')
-    parser.add_argument('--eval_dataset', type=str, default='default', help='Valid datasets are default and training')
+    parser.add_argument('--eval_resnet_id_name', type=str, default=200000, help='name of resnet in /models to load for evaluation')
+    parser.add_argument('--eval_resnet_tilde_name', type=str, default=200000, help='name of resnet in /models to load for evaluation')
+    parser.add_argument('--eval_dataset', type=str, default='test', choices=["test","train"], help='Valid datasets are default and training')
 
 
     # Miscellaneous.

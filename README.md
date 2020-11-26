@@ -198,20 +198,21 @@ $ python brats_auc.py
 
 Evluation
 
+1. Single ID utvärderad på verkliga trainingbilder / Single Tilde utvärderad på verkliga trainingbilder
 ```bash
-python main.py --mode test --dataset PCam --crop_size 96 --image_size 96 --c_dim 1                  --image_dir data/pcam                  --sample_dir pcam/samples                  --log_dir pcam/logs                  --model_save_dir pcam/models  --result_dir pcam/results                  --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000 --test_iters 1660000 --eval_dataset train --eval_resnet_name pcam_resnet.ckpt
+python main.py --mode test --dataset CelebA --image_size 128 --c_dim 1 --sample_dir celeba/samples --log_dir celeba/logs --model_save_dir celeba/models --result_dir celeba/results/1 --selected_attrs Eyeglasses --lambda_id 5  --test_iters 4200000 --eval_dataset train --eval_resnet_id_name celeba_id_resnet_single.ckpt --eval_resnet_tilde_name celeba_tilde_resnet_single.ckpt
 ```
-
+2. Dual ID utvärderad på verkliga träningsbilder /  Dual Tilde utvärderad på verkliga träningsbilder
 ```bash
-python main.py --mode test --dataset PCam --crop_size 96 --image_size 96 --c_dim 1                  --image_dir data/pcam                  --sample_dir pcam/samples                  --log_dir pcam/logs                  --model_save_dir pcam/models                  --result_dir pcam/results                  --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000 --test_iters 1660000 --eval_dataset default --eval_resnet_name pcam_resnet.ckpt
+python main.py --mode test --dataset CelebA --image_size 128 --c_dim 2 --sample_dir celeba/samples --log_dir celeba/logs --model_save_dir celeba/models --result_dir celeba/results/2 --selected_attrs Eyeglasses Narrow_Eyes  --lambda_id 5  --test_iters 2550000 --eval_dataset train --eval_resnet_id_name celeba_id_resnet_dual.ckpt --eval_resnet_tilde_name celeba_tilde_resnet_dual.ckpt
 ```
-
+3. Single, Actual utvärderad på genererade tilde från validering / Actual utvärderad på genererade ID från validering
 ```bash
-python main.py --mode test --dataset CelebA --image_size 128 --c_dim 8                  --sample_dir celeba/samples                  --log_dir celeba/logs                  --model_save_dir celeba/models                  --result_dir celeba/results                  --selected_attrs Eyeglasses Bags_Under_Eyes Bushy_Eyebrows Arched_Eyebrows Narrow_Eyes Smiling Young Male  --lambda_id 5                  --test_iters 5500000 --eval_dataset default --eval_resnet_name celeba_resnet.ckpt
+python main.py --mode test --dataset CelebA --image_size 128 --c_dim 1 --sample_dir celeba/samples --log_dir celeba/logs --model_save_dir celeba/models --result_dir celeba/results/3 --selected_attrs Eyeglasses --lambda_id 5  --test_iters 4200000 --eval_dataset test --eval_resnet_id_name celeba_resnet_actual.ckpt --eval_resnet_tilde_name celeba_resnet_actual.ckpt
 ```
-
+4. Dual, Actual utvärderad på genererade tilde från validering / Actual utvärderad på genererade ID från validering
 ```bash
-python main.py --mode test --dataset CelebA --image_size 128 --c_dim 8                  --sample_dir celeba/samples                  --log_dir celeba/logs                  --model_save_dir celeba/models                  --result_dir celeba/results                  --selected_attrs Eyeglasses Bags_Under_Eyes Bushy_Eyebrows Arched_Eyebrows Narrow_Eyes Smiling Young Male  --lambda_id 5                  --test_iters 5500000 --eval_dataset train --eval_resnet_name celeba_resnet.ckpt
+python main.py --mode test --dataset CelebA --image_size 128 --c_dim 2 --sample_dir celeba/samples --log_dir celeba/logs --model_save_dir celeba/models --result_dir celeba/results/4 --selected_attrs Eyeglasses Narrow_Eyes  --lambda_id 5  --test_iters 2550000 --eval_dataset test --eval_resnet_id_name celeba_resnet_actual.ckpt --eval_resnet_tilde_name celeba_resnet_actual.ckpt
 ```
 
 
