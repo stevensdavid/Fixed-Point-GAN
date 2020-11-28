@@ -102,6 +102,7 @@ def train_resnet(config):
         # Train on generated images from validation set.
         # This is not optimal, but better than training on
         # the training set.
+    if config.generator_iters is not None or config.train_on == "val":
         train_data, val_data = val_data, train_data
 
     def _transform_batch(x, y):
@@ -325,6 +326,7 @@ if __name__ == "__main__":
         default="pcam/models", 
         help="Directory where GAN models are saved"
     )
+    parser.add_argument("--train_on", type=str, default="train", choices=["train", "val"])
 
     parser.add_argument(
         "--generator_iters",
