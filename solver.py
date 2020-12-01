@@ -220,14 +220,15 @@ class Solver(object):
         conf_precision = (TN / float(TN + FP))    # calculate f_1 score
         conf_f1 = 2 * ((conf_precision * conf_sensitivity) / (conf_precision + conf_sensitivity))    
 
+        round_to = 4
 
         metrics.append('-'*50)
-        metrics.append(f'Accuracy: {round(conf_accuracy,2)}')
-        metrics.append(f'Mis-Classification: {round(conf_misclassification,2)}')
-        metrics.append(f'Sensitivity: {round(conf_sensitivity,2)}')
-        metrics.append(f'Specificity: {round(conf_specificity,2)}')
-        metrics.append(f'Precision: {round(conf_precision,2)}')
-        metrics.append(f'f_1 Score: {round(conf_f1,2)}')
+        metrics.append(f'Accuracy: {round(conf_accuracy,round_to)}')
+        metrics.append(f'Mis-Classification: {round(conf_misclassification,round_to)}')
+        metrics.append(f'Sensitivity: {round(conf_sensitivity,round_to)}')
+        metrics.append(f'Specificity: {round(conf_specificity,round_to)}')
+        metrics.append(f'Precision: {round(conf_precision,round_to)}')
+        metrics.append(f'f_1 Score: {round(conf_f1,round_to)}')
 
         result_metrics_path = os.path.join(self.result_dir,  '{}-metrics.txt'.format(name))
         metrics = '\n'.join(map(str, metrics)) 
@@ -603,6 +604,29 @@ class Solver(object):
                 # Translate images.
                 x_fake_list = [x_real]
                 for c_trg in c_trg_list:
+                    
+                    c_trg_tilde = (~c_trg.bool()).float()
+
+                    print('{}%'.format(100* (i/len(data_loader))))
+                    
+                    if self.eval_dataset == 'train':
+                        resnet_output_tilde = self.resnet_tilde(x_real.to("cpu")).to(self.device)
+                        predictions_tilde = resnet_output_tilde >= 0.5
+                        y_test_tilde = torch.cat([y_test_tilde, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                        y_pred_tilde = torch.cat([y_pred_tilde, predictions_tilde.to("cpu").int()], 0)
+                        cm_tilde = metrics.confusion_matrix(y_test_tilde, y_pred_tilde)
+                        self.confusion_metrics(cm_tilde, 'train-tilde')
+
+                        resnet_output_id = self.resnet_id(x_real.to("cpu")).to(self.device)
+                        predictions_id = resnet_output_id >= 0.5
+                        y_test_id = torch.cat([y_test_id, c_trg_tilde[:, :1].to("cpu").int()], 0)
+                        y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
+                        cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
+                        self.confusion_metrics(cm_id, 'train-id')
+
+                        
+
+                        continue                      
                                         
                     # settings
                     h, w = 0, 0        # for raster image
@@ -627,7 +651,6 @@ class Solver(object):
                             image[:] = (200, 0, 0)
                         return image
 
-                    c_trg_tilde = (~c_trg.bool()).float()
                     for index, c in enumerate(c_trg):
                         # Save generated Tilde image
 
@@ -698,10 +721,6 @@ class Solver(object):
                         #result_generated_path = os.path.join(result_generated_path, '{}_{}-images.png'.format(i+1, index+1))   
                         #generated_tilde_class_image.save(result_generated_path) 
                         #save_image(self.denorm(torch.tanh(delta_tilde[index] + x_real[index]).data.cpu()), result_generated_path, nrow=1, padding=0)
-
-
-
-
 
                     resnet_output_tilde = self.resnet_tilde(x_real_tilde.to("cpu")).to(self.device)
                     predictions_tilde = resnet_output_tilde >= 0.5

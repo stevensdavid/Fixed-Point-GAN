@@ -12,7 +12,7 @@ import h5py
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
 
-    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, eval_datset):
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, eval_dataset):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
         self.attr_path = attr_path
@@ -24,11 +24,11 @@ class CelebA(data.Dataset):
         self.attr2idx = {}
         self.idx2attr = {}
         self.preprocess()
-        self.eval_datset = eval_datset
+        self.eval_dataset = eval_dataset
 
 
 
-        if mode == 'train' or eval_datset == 'train':
+        if mode == 'train' or eval_dataset == 'train':
             self.num_images = len(self.train_dataset)
             print(self.num_images)
         else:
@@ -64,7 +64,7 @@ class CelebA(data.Dataset):
 
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
-        dataset = self.train_dataset if (self.mode == 'train' or self.eval_datset == 'train') else self.test_dataset
+        dataset = self.train_dataset if (self.mode == 'train' or self.eval_dataset == 'train') else self.test_dataset
         filename, label = dataset[index]
         image = Image.open(os.path.join(self.image_dir, filename))
         return self.transform(image), torch.FloatTensor(label)
@@ -132,8 +132,9 @@ class BRATS_SYN(data.Dataset):
 class PCam(data.Dataset):
     """Dataset class for the PatchCamelyon dataset."""
 
-    def __init__(self, image_dir, transform, mode, eval_datset):
+    def __init__(self, image_dir, transform, mode, eval_dataset):
         """Initialize and Load the PCam dataset."""
+
         if mode not in ("train", "test", "val", "generate_dataset"):
             raise ValueError(f"Support modes are train, test and val, received: {mode}")
         self.image_dir = image_dir
@@ -142,12 +143,12 @@ class PCam(data.Dataset):
         self.x_file = None
         self.y_file = None
         self.num_images = None
+        self.eval_dataset = eval_dataset
         self.load_data()
-        self.eval_datset = eval_datset
 
     def load_data(self):
         """Load PCam dataset"""
-        if self.mode == "train":
+        if self.mode == "train" or self.eval_dataset == 'train':
             x_file = "train_x.h5"
             y_file = "train_y.h5"
         elif self.mode == "val":
@@ -184,10 +185,10 @@ class PCam(data.Dataset):
 
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
-               batch_size=16, dataset='CelebA', mode='train', num_workers=1, eval_datset = None):
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1, eval_dataset = None):
 
-    if eval_datset is None:
-        eval_datset = mode
+    if eval_dataset is None:
+        eval_dataset = mode
 
     """Build and return a data loader."""
     transform = []
@@ -202,11 +203,11 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     print("dataset", dataset)
 
     if dataset == 'CelebA':
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, eval_datset)
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, eval_dataset)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
-        dataset = PCam(image_dir, transform, mode, eval_datset)
+        dataset = PCam(image_dir, transform, mode, eval_dataset)
     elif dataset == 'Directory' or dataset == 'Dogs':
         image_dir = 'data/dogs'
         dataset = ImageFolder(image_dir, transform)
@@ -217,7 +218,6 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
                                   shuffle=(mode=='train'),
                                   num_workers=num_workers)
 
-    print(data_loader)                              
                                   
     return data_loader
 

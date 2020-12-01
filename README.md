@@ -196,7 +196,7 @@ $ python main.py --mode test_brats --dataset BRATS --crop_size 256 --image_size 
 $ python brats_auc.py
 ```
 
-Evluation
+CelebA
 
 1. Single ID utvärderad på verkliga trainingbilder / Single Tilde utvärderad på verkliga trainingbilder
 ```bash
@@ -214,6 +214,13 @@ python main.py --mode test --dataset CelebA --image_size 128 --c_dim 1 --sample_
 ```bash
 python main.py --mode test --dataset CelebA --image_size 128 --c_dim 2 --sample_dir celeba/samples --log_dir celeba/logs --model_save_dir celeba/models --result_dir celeba/results/4 --selected_attrs Eyeglasses Narrow_Eyes  --lambda_id 5  --test_iters 2550000 --eval_dataset test --eval_resnet_id_name celeba_resnet_actual.ckpt --eval_resnet_tilde_name celeba_resnet_actual.ckpt
 ```
+
+PCAM
+
+1. Single ID utvärderad på verkliga trainingbilder / Single Tilde utvärderad på verkliga trainingbilder
+python main.py --mode test --dataset PCam --crop_size 96 --image_size 96 --c_dim 1                  --image_dir data/pcam                  --sample_dir pcam/samples                  --log_dir pcam/logs                  --model_save_dir pcam/models                  --result_dir pcam/results/1                  --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000 --test_iters 4600000 --eval_dataset train --eval_resnet_id_name pcam_id_resnet.ckpt --eval_resnet_tilde_name pcam_tilde_resnet.ckpt
+2. Single, Actual utvärderad på genererade tilde från validering / Actual utvärderad på genererade ID från validering
+python main.py --mode test --dataset PCam --crop_size 96 --image_size 96 --c_dim 1                  --image_dir data/pcam                  --sample_dir pcam/samples                  --log_dir pcam/logs                  --model_save_dir pcam/models                  --result_dir pcam/results/2                  --batch_size 32 --num_workers 8 --lambda_id 0.1 --num_iters 10000 --test_iters 4600000 --eval_dataset test --eval_resnet_id_name pcam_actual_resnet.ckpt --eval_resnet_tilde_name pcam_actual_resnet.ckpt
 
 
 
