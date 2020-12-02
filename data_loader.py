@@ -212,7 +212,6 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
 
     if dataset == 'CelebA':
         dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, eval_dataset, match_distribution)
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, match_distribution)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
