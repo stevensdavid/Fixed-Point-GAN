@@ -28,7 +28,8 @@ def main(config):
     if config.dataset in ['CelebA']:
         data_loader = get_loader(config.image_dir, config.attr_path, config.selected_attrs,
                                     config.crop_size, config.image_size, config.batch_size,
-                                    'CelebA', config.mode, config.num_workers, config.eval_dataset)
+                                    'CelebA', config.mode, config.num_workers, config.eval_dataset,
+                                    match_distribution=config.mode == "test")
     elif config.dataset in ['PCam']:
         data_loader = get_loader(config.image_dir, None, None,
                                    config.crop_size, config.image_size, config.batch_size,
