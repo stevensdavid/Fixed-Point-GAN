@@ -197,8 +197,6 @@ class Solver(object):
         FP = conf_matrix[0][1]
         FN = conf_matrix[1][0]   
 
-  
-
         metrics = []
 
         metrics.append(('{} {}'.format('True Positives:', TP)))
@@ -609,7 +607,7 @@ class Solver(object):
 
                     print('{}%'.format(100* (i/len(data_loader))))
                     
-                    if self.eval_dataset == 'train':
+                    if self.eval_dataset == 'train' or self.eval_dataset == 'val':
                         resnet_output_tilde = self.resnet_tilde(x_real.to("cpu")).to(self.device)
                         predictions_tilde = resnet_output_tilde >= 0.5
                         y_test_tilde = torch.cat([y_test_tilde, c_trg_tilde[:, :1].to("cpu").int()], 0)
@@ -623,8 +621,6 @@ class Solver(object):
                         y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
                         cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
                         self.confusion_metrics(cm_id, 'train-id')
-
-                        
 
                         continue                      
                                         

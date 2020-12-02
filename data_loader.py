@@ -148,12 +148,12 @@ class PCam(data.Dataset):
 
     def load_data(self):
         """Load PCam dataset"""
-        if self.mode == "train" or self.eval_dataset == 'train':
+        if self.mode == "train":
             x_file = "train_x.h5"
             y_file = "train_y.h5"
-        elif self.mode == "val":
-            x_file = "val_x.h5"
-            y_file = "val_y.h5"
+        elif self.mode == "val" or self.eval_dataset == 'val':
+            x_file = "valid_x.h5"
+            y_file = "valid_y.h5"
         elif self.mode == "test":
             x_file = "test_x.h5"
             y_file = "test_y.h5"

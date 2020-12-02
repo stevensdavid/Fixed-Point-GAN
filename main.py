@@ -103,7 +103,7 @@ if __name__ == '__main__':
     parser.add_argument('--test_iters', type=int, default=200000, help='test model from this step')
     parser.add_argument('--eval_resnet_id_name', type=str, default=200000, help='name of resnet in /models to load for evaluation')
     parser.add_argument('--eval_resnet_tilde_name', type=str, default=200000, help='name of resnet in /models to load for evaluation')
-    parser.add_argument('--eval_dataset', type=str, default='test', choices=["test","train"], help='Valid datasets are default and training')
+    parser.add_argument('--eval_dataset', type=str, default='test', choices=["test","train", "val"], help='Valid datasets are default and training')
 
 
     # Miscellaneous.
