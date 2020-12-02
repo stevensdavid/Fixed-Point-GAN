@@ -14,7 +14,7 @@ import numpy as np
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
 
-    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode):
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, match_distribution):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
         self.attr_path = attr_path
@@ -23,6 +23,7 @@ class CelebA(data.Dataset):
         self.mode = mode
         self.train_dataset = []
         self.test_dataset = []
+        self.match_distribution = match_distribution
         self.attr2idx = {}
         self.idx2attr = {}
         self.preprocess()
@@ -57,7 +58,16 @@ class CelebA(data.Dataset):
                 self.test_dataset.append([filename, label])
             else:
                 self.train_dataset.append([filename, label])
-
+        if self.match_distribution:
+            # Match the distribution of the first label in test and training set 
+            # and the dataset size.
+            test_labels = [l[0] for _, l in self.test_dataset]
+            num_zeroes = len([l for l in test_labels if l == 0])
+            num_ones = len([l for l in test_labels if l == 0])
+            train_zeroes = [[f, l] for f, l in self.train_dataset if l[0] == 0]
+            train_ones = [[f, l] for f, l in self.train_dataset if l[0] == 1]
+            self.train_dataset = train_zeroes[:num_zeroes] + train_ones[:num_ones]
+            random.shuffle(self.train_dataset)
         print('Finished preprocessing the CelebA dataset...')
 
     def get_labels(self):
@@ -205,7 +215,7 @@ class PCam(data.Dataset):
 
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
-               batch_size=16, dataset='CelebA', mode='train', num_workers=1, in_memory=False, weighted=False, augment=None):
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1, in_memory=False, weighted=False, augment=None, match_distribution=False):
     """Build and return a data loader."""
     transform = []
     if augment is None:
@@ -219,7 +229,7 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     transform = T.Compose(transform)
 
     if dataset == 'CelebA':
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode)
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, match_distribution)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
