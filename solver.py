@@ -17,6 +17,7 @@ from cv2 import cv2
 from PIL import Image
 import torch.nn as nn
 from sklearn import metrics
+from tqdm import tqdm
 
 class ResNet(nn.Module):
     def __init__(self, num_classes):
@@ -89,6 +90,7 @@ class Solver(object):
         self.sample_dir = config.sample_dir
         self.model_save_dir = config.model_save_dir
         self.result_dir = config.result_dir
+        self.resnet_save_dir = config.resnet_save_dir
 
         # Step size.
         self.log_step = config.log_step
@@ -139,7 +141,7 @@ class Solver(object):
 
     def restore_model_tilde_resnet(self, name):
         print('Loading the tilde resenet model')
-        res_path = os.path.join(self.model_save_dir, name)
+        res_path = os.path.join(self.resnet_save_dir, name)
         print(res_path)
         self.resnet_tilde = ResNet(num_classes=1)
         self.resnet_tilde.load_state_dict(torch.load(res_path),strict=False)
@@ -147,7 +149,7 @@ class Solver(object):
 
     def restore_model_id_resnet(self, name):
         print('Loading the id resenet model')
-        res_path = os.path.join(self.model_save_dir, name)
+        res_path = os.path.join(self.resnet_save_dir, name)
         print(res_path)
         self.resnet_id = ResNet(num_classes=1)
         self.resnet_id.load_state_dict(torch.load(res_path),strict=False)
@@ -590,7 +592,7 @@ class Solver(object):
         input_image = None    
         
         with torch.no_grad():
-            for i, (x_real, c_org) in enumerate(data_loader):
+            for i, (x_real, c_org) in tqdm(enumerate(data_loader), total=len(data_loader)):
                 x_real = x_real.to(self.device)
                 x_real_tilde = x_real.clone()
                 x_real_tilde = x_real_tilde.to(self.device)
@@ -605,7 +607,7 @@ class Solver(object):
                     
                     c_trg_tilde = (~c_trg.bool()).float()
 
-                    print('{}%'.format(100* (i/len(data_loader))))
+                    # print('{}%'.format(100* (i/len(data_loader))))
                     
                     if self.eval_dataset == 'train' or self.eval_dataset == 'val':
                         resnet_output_tilde = self.resnet_tilde(x_real.to("cpu")).to(self.device)
@@ -624,28 +626,28 @@ class Solver(object):
 
                         continue                      
                                         
-                    # settings
-                    h, w = 0, 0        # for raster image
-                    nrows, ncols = len(c_trg), 10  # array of sub-plots
+                    # # settings
+                    # h, w = 0, 0        # for raster image
+                    # nrows, ncols = len(c_trg), 10  # array of sub-plots
 
-                    my_dpi = 96
+                    # my_dpi = 96
              
-                    fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(1078/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
+                    # fig, ax = plt.subplots(nrows=nrows, ncols=ncols, figsize=(1078/my_dpi, (108 * nrows)/my_dpi), dpi=my_dpi)
 
-                    def get_grey_image(image):
-                        image = np.array(image) 
-                        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-                        return gray_image
+                    # def get_grey_image(image):
+                    #     image = np.array(image) 
+                    #     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                    #     return gray_image
 
                                                 
-                    def get_prediction_image(image, v):
-                        image = np.array(image) 
-                        # Fill image with color
-                        if v == 1:
-                            image[:] = (0, 200, 0)
-                        else:
-                            image[:] = (200, 0, 0)
-                        return image
+                    # def get_prediction_image(image, v):
+                    #     image = np.array(image) 
+                    #     # Fill image with color
+                    #     if v == 1:
+                    #         image[:] = (0, 200, 0)
+                    #     else:
+                    #         image[:] = (200, 0, 0)
+                    #     return image
 
                     for index, c in enumerate(c_trg):
                         # Save generated Tilde image
@@ -668,47 +670,47 @@ class Solver(object):
                         generated_tilde_class_image = self.denorm(generated_tilde_class_image.data.cpu())
                         x_real_id[index] = self.norm(generated_tilde_class_image.data.cpu())
 
-                        difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
-                        difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
-                        difference_generated_image = np.abs(generated_correct_class_image - generated_tilde_class_image)
+                        # difference_real_generated_image = np.abs(input_image - generated_correct_class_image)
+                        # difference_real_generated_tilde_image = np.abs(input_image - generated_tilde_class_image)
+                        # difference_generated_image = np.abs(generated_correct_class_image - generated_tilde_class_image)
 
-                        axi = ax.flat
+                        # axi = ax.flat
 
-                        ax_col_one = axi[index * ncols]
-                        ax_col_two = axi[index * ncols+1]
-                        ax_col_three = axi[index * ncols+2]
-                        ax_col_four = axi[index * ncols+3]
-                        ax_col_five = axi[index * ncols+4]
-                        ax_col_six = axi[index * ncols+5]
-                        ax_col_seven = axi[index * ncols+6]       
-                        ax_col_eight = axi[index * ncols+7]
+                        # ax_col_one = axi[index * ncols]
+                        # ax_col_two = axi[index * ncols+1]
+                        # ax_col_three = axi[index * ncols+2]
+                        # ax_col_four = axi[index * ncols+3]
+                        # ax_col_five = axi[index * ncols+4]
+                        # ax_col_six = axi[index * ncols+5]
+                        # ax_col_seven = axi[index * ncols+6]       
+                        # ax_col_eight = axi[index * ncols+7]
 
-                        input_image = transforms.ToPILImage()(input_image).convert("RGB")
-                        generated_correct_class_image = transforms.ToPILImage()(generated_correct_class_image).convert("RGB")
-                        generated_tilde_class_image = transforms.ToPILImage()(generated_tilde_class_image).convert("RGB")
-                        difference_real_generated_image = transforms.ToPILImage()(difference_real_generated_image).convert("RGB")
-                        difference_real_generated_tilde_image = transforms.ToPILImage()(difference_real_generated_tilde_image).convert("RGB")
-                        difference_generated_image = transforms.ToPILImage()(difference_generated_image).convert("RGB")
+                        # input_image = transforms.ToPILImage()(input_image).convert("RGB")
+                        # generated_correct_class_image = transforms.ToPILImage()(generated_correct_class_image).convert("RGB")
+                        # generated_tilde_class_image = transforms.ToPILImage()(generated_tilde_class_image).convert("RGB")
+                        # difference_real_generated_image = transforms.ToPILImage()(difference_real_generated_image).convert("RGB")
+                        # difference_real_generated_tilde_image = transforms.ToPILImage()(difference_real_generated_tilde_image).convert("RGB")
+                        # difference_generated_image = transforms.ToPILImage()(difference_generated_image).convert("RGB")
 
-                        ax_col_one.imshow(input_image, aspect='equal')
-                        ax_col_two.imshow(generated_correct_class_image, aspect='equal')
-                        ax_col_three.imshow(generated_tilde_class_image, aspect='equal')
-                        ax_col_four.imshow(get_grey_image(difference_real_generated_image), aspect='equal', cmap='jet')
-                        ax_col_five.imshow(get_grey_image(difference_real_generated_tilde_image), aspect='equal', cmap='jet')
-                        ax_col_six.imshow(get_grey_image(difference_generated_image), aspect='equal', cmap='jet')
-                        ax_col_seven.imshow(difference_real_generated_image, aspect='equal')
-                        ax_col_eight.imshow(difference_real_generated_tilde_image, aspect='equal')
+                        # ax_col_one.imshow(input_image, aspect='equal')
+                        # ax_col_two.imshow(generated_correct_class_image, aspect='equal')
+                        # ax_col_three.imshow(generated_tilde_class_image, aspect='equal')
+                        # ax_col_four.imshow(get_grey_image(difference_real_generated_image), aspect='equal', cmap='jet')
+                        # ax_col_five.imshow(get_grey_image(difference_real_generated_tilde_image), aspect='equal', cmap='jet')
+                        # ax_col_six.imshow(get_grey_image(difference_generated_image), aspect='equal', cmap='jet')
+                        # ax_col_seven.imshow(difference_real_generated_image, aspect='equal')
+                        # ax_col_eight.imshow(difference_real_generated_tilde_image, aspect='equal')
 
-                        ax_col_one.text(4,5, c, color='white', va="center", backgroundcolor='black')
+                        # ax_col_one.text(4,5, c, color='white', va="center", backgroundcolor='black')
 
-                        ax_col_one.set_axis_off()
-                        ax_col_two.set_axis_off()
-                        ax_col_three.set_axis_off()
-                        ax_col_four.set_axis_off()
-                        ax_col_five.set_axis_off()
-                        ax_col_six.set_axis_off()
-                        ax_col_seven.set_axis_off()
-                        ax_col_eight.set_axis_off()
+                        # ax_col_one.set_axis_off()
+                        # ax_col_two.set_axis_off()
+                        # ax_col_three.set_axis_off()
+                        # ax_col_four.set_axis_off()
+                        # ax_col_five.set_axis_off()
+                        # ax_col_six.set_axis_off()
+                        # ax_col_seven.set_axis_off()
+                        # ax_col_eight.set_axis_off()
 
                         #result_generated_path = os.path.join(self.result_dir,  'generated/{}'.format(c_tilde))
                         #if not os.path.exists(result_generated_path):
@@ -720,15 +722,15 @@ class Solver(object):
 
                     resnet_output_tilde = self.resnet_tilde(x_real_tilde.to("cpu")).to(self.device)
                     predictions_tilde = resnet_output_tilde >= 0.5
-                    abs_diff = abs(predictions_tilde.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
-                    for index, c in enumerate(c_trg[:, 0]):
-                        axi = ax.flat      
-                        ax_col_nine = axi[index * ncols+8]
-                        if abs_diff[index].item() == 1:
-                            ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
-                        else:
-                            ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
-                        ax_col_nine.set_axis_off()
+                    # abs_diff = abs(predictions_tilde.to("cpu").float() - c_trg_tilde[:, :1].to("cpu").float())
+                    # for index, c in enumerate(c_trg[:, 0]):
+                    #     axi = ax.flat      
+                    #     ax_col_nine = axi[index * ncols+8]
+                    #     if abs_diff[index].item() == 1:
+                    #         ax_col_nine.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                    #     else:
+                    #         ax_col_nine.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                    #     ax_col_nine.set_axis_off()
 
                     y_test_tilde = torch.cat([y_test_tilde, c_trg[:, :1].to("cpu").int()], 0)
                     y_pred_tilde = torch.cat([y_pred_tilde, predictions_tilde.to("cpu").int()], 0)
@@ -737,29 +739,29 @@ class Solver(object):
 
                     resnet_output_id = self.resnet_id(x_real_id.to("cpu")).to(self.device)
                     predictions_id = resnet_output_id >= 0.5
-                    abs_diff = abs(predictions_id.to("cpu").float() - c_trg[:, :1].to("cpu").float())
-                    for index, c in enumerate(c_trg[:, 0]):
-                        axi = ax.flat      
-                        ax_col_ten = axi[index * ncols+9]
-                        if abs_diff[index].item() == 1:
-                            ax_col_ten.imshow(get_prediction_image(input_image, 1), aspect='equal')
-                        else:
-                            ax_col_ten.imshow(get_prediction_image(input_image, 0), aspect='equal')
-                        ax_col_ten.set_axis_off()
+                    # abs_diff = abs(predictions_id.to("cpu").float() - c_trg[:, :1].to("cpu").float())
+                    # for index, c in enumerate(c_trg[:, 0]):
+                    #     axi = ax.flat      
+                    #     ax_col_ten = axi[index * ncols+9]
+                    #     if abs_diff[index].item() == 1:
+                    #         ax_col_ten.imshow(get_prediction_image(input_image, 1), aspect='equal')
+                    #     else:
+                    #         ax_col_ten.imshow(get_prediction_image(input_image, 0), aspect='equal')
+                    #     ax_col_ten.set_axis_off()
 
                     y_test_id = torch.cat([y_test_id, c_trg_tilde[:, :1].to("cpu").int()], 0)
                     y_pred_id = torch.cat([y_pred_id, predictions_id.to("cpu").int()], 0)
                     cm_id = metrics.confusion_matrix(y_test_id, y_pred_id)
                     self.confusion_metrics(cm_id, 'id')
                     
-                    print('Saving image {}'.format(i+1))
-                    plt.tight_layout(True)
-                    plt.gca().set_axis_off()
-                    plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
-                    plt.margins(0,0)
-                    result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
-                    plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
-                    plt.close()
+                    # print('Saving image {}'.format(i+1))
+                    # plt.tight_layout(True)
+                    # plt.gca().set_axis_off()
+                    # plt.subplots_adjust(top = 1, bottom = 0, right = 1, left = 0, hspace = 0, wspace = 0)
+                    # plt.margins(0,0)
+                    # result_path = os.path.join(self.result_dir, '{}-images.jpg'.format(i+1))
+                    # plt.savefig(result_path, result_pathbbox_inches = 'tight', pad_inches = 0)
+                    # plt.close()
                     
 
                 # Save the translated images.

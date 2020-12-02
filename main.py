@@ -67,7 +67,7 @@ def main(config):
             solver.test_brats()
     elif config.mode == 'generate_dataset':
         if config.dataset in ['PCam']:
-            solve.generate_dataset()
+            solver.generate_dataset()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -119,6 +119,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_save_dir', type=str, default='celeba/models')
     parser.add_argument('--sample_dir', type=str, default='celeba/samples')
     parser.add_argument('--result_dir', type=str, default='celeba/results')
+    parser.add_argument('--resnet_save_dir', type=str, default="resnets")
 
     # Step size.
     parser.add_argument('--log_step', type=int, default=10)
