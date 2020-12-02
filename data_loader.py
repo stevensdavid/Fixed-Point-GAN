@@ -12,7 +12,7 @@ import h5py
 class CelebA(data.Dataset):
     """Dataset class for the CelebA dataset."""
 
-    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, eval_dataset, match_distribution):
+    def __init__(self, image_dir, attr_path, selected_attrs, transform, mode, eval_dataset, match_distribution, subsample_offset):
         """Initialize and preprocess the CelebA dataset."""
         self.image_dir = image_dir
         self.attr_path = attr_path
@@ -22,6 +22,7 @@ class CelebA(data.Dataset):
         self.train_dataset = []
         self.test_dataset = []
         self.match_distribution = match_distribution
+        self.subsample_offset = subsample_offset
         self.attr2idx = {}
         self.idx2attr = {}
         self.preprocess()
@@ -68,7 +69,7 @@ class CelebA(data.Dataset):
             num_ones = len([l for l in test_labels if l == 0])
             train_zeroes = [[f, l] for f, l in self.train_dataset if l[0] == 0]
             train_ones = [[f, l] for f, l in self.train_dataset if l[0] == 1]
-            self.train_dataset = train_zeroes[:num_zeroes] + train_ones[:num_ones]
+            self.train_dataset = train_zeroes[num_zeroes*self.subsample_offset:num_zeroes*(self.subsample_offset + 1)] + train_ones[num_ones*self.subsample_offset:num_ones*(self.subsample_offset + 1)]
             random.shuffle(self.train_dataset)
         print('Finished preprocessing the CelebA dataset...')
 
@@ -195,7 +196,7 @@ class PCam(data.Dataset):
 
 
 def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=128, 
-               batch_size=16, dataset='CelebA', mode='train', num_workers=1, eval_dataset = None, in_memory=False, weighted=False, augment=None, match_distribution=False):
+               batch_size=16, dataset='CelebA', mode='train', num_workers=1, eval_dataset = None, in_memory=False, weighted=False, augment=None, match_distribution=False, subsample_offset=None):
     if eval_dataset is None:
         eval_dataset = mode
     """Build and return a data loader."""
@@ -211,7 +212,7 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     print("dataset", dataset)
 
     if dataset == 'CelebA':
-        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, eval_dataset, match_distribution)
+        dataset = CelebA(image_dir, attr_path, selected_attrs, transform, mode, eval_dataset, match_distribution, subsample_offset)
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
