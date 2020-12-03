@@ -1,19 +1,19 @@
 # Ignore futurewarnings from using old version of tensorboard
+from collections import namedtuple
+import os
+from tqdm import tqdm
+from logger import Logger
+from numpy import inf
+import torch.optim as optim
+import torch.nn as nn
+from main import str2bool
+from argparse import ArgumentParser
+from data_loader import get_loader
+from torchvision.models.resnet import resnet50
+import torch
 from solver import Solver
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
-import torch
-from torchvision.models.resnet import resnet50
-from data_loader import get_loader
-from argparse import ArgumentParser
-from main import str2bool
-import torch.nn as nn
-import torch.optim as optim
-from numpy import inf
-from logger import Logger
-from tqdm import tqdm
-import os
 
 
 def add_missing_solver_args(config):
@@ -35,6 +35,7 @@ def add_missing_solver_args(config):
     config.g_repeat_num = 6
     config.d_repeat_num = 6
     return config
+
 
 class ResNet(nn.Module):
     def __init__(self, num_classes):
@@ -117,17 +118,18 @@ def train_resnet(config):
         elif config.generator_op == "tilde":
             # Only flip first attribute. Assumed to be glasses.
             y_trg = y.clone().to(device)
-            y_trg[:, 0] = (~y_trg[:,0].bool()).float()
+            y_trg[:, 0] = (~y_trg[:, 0].bool()).float()
         elif config.generator_op == "random":
             y_trg = y.clone().to(device)
-            distribution = torch.distributions.bernoulli.Bernoulli(0.5*torch.ones_like(y_trg[:,0]))
+            distribution = torch.distributions.bernoulli.Bernoulli(
+                0.5*torch.ones_like(y_trg[:, 0]))
             y_trg[:, 0] = distribution.sample()
         else:
             raise ValueError("Invalid generator_op")
         x_out = generator.transform_batch(x, y_trg)
         return x_out, y_trg
 
-    loss_function = nn.BCEWithLogitsLoss() 
+    loss_function = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(
         model.parameters(), lr=config.lr, betas=[config.beta1, config.beta2]
     )
@@ -159,7 +161,7 @@ def train_resnet(config):
             x = x.to(device)
             if y.shape[1] > 1:
                 # Only extract first attribute.
-                y = y[:,0:1]
+                y = y[:, 0:1]
             y = y.to(device)
             with torch.cuda.amp.autocast():
                 output = model(x).to(device)
@@ -179,10 +181,12 @@ def train_resnet(config):
                 n_samples = batch_idx * config.batch_size
                 current_loss = running_loss / batch_idx
                 current_acc = correct_classifications / n_samples
-                current_sensitivity = correct_positive / max(n_positive_samples, 1)
-                current_specificity = correct_negative / max(n_negative_samples, 1)
+                current_sensitivity = correct_positive / \
+                    max(n_positive_samples, 1)
+                current_specificity = correct_negative / \
+                    max(n_negative_samples, 1)
                 tqdm.write(
-                        f"Training batch {batch_idx}/{len(train_data)} Current loss: {current_loss:.4f} Current accuracy: {current_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
+                    f"Training batch {batch_idx}/{len(train_data)} Current loss: {current_loss:.4f} Current accuracy: {current_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
                 )
         train_loss = running_loss / len(train_data)
         train_acc = correct_classifications / len(train_data.dataset)
@@ -205,7 +209,7 @@ def train_resnet(config):
                 x = x.to(device)
                 if y.shape[1] > 1:
                     # Only extract first attribute.
-                    y = y[:,0:1]
+                    y = y[:, 0:1]
                 y = y.to(device)
                 with torch.cuda.amp.autocast():
                     output = model(x).to(device)
@@ -221,10 +225,12 @@ def train_resnet(config):
                     n_samples = batch_idx * config.batch_size
                     cur_val_loss = val_loss / batch_idx
                     cur_val_acc = correct_classifications / n_samples
-                    current_sensitivity = correct_positive / max(n_positive_samples, 1)
-                    current_specificity = correct_negative / max(n_negative_samples, 1)
+                    current_sensitivity = correct_positive / \
+                        max(n_positive_samples, 1)
+                    current_specificity = correct_negative / \
+                        max(n_negative_samples, 1)
                     tqdm.write(
-                            f"Validating batch {batch_idx}/{len(val_data)} Current loss: {cur_val_loss:.4f} Current accuracy: {cur_val_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
+                        f"Validating batch {batch_idx}/{len(val_data)} Current loss: {cur_val_loss:.4f} Current accuracy: {cur_val_acc:.4f} Current sensitivity: {current_sensitivity:.4f} Current specificity: {current_specificity:.4f}"
                     )
             val_loss = val_loss / len(val_data)
             val_acc = correct_classifications / len(val_data.dataset)
@@ -254,7 +260,8 @@ def train_resnet(config):
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 tests_since_best = 0
-                best_model_save_path = os.path.join(config.resnet_save_dir, f"{config.dataset}_resnet_best.ckpt")
+                best_model_save_path = os.path.join(
+                    config.resnet_save_dir, f"{config.dataset}_resnet_best.ckpt")
                 torch.save(model.state_dict(), best_model_save_path)
             else:
                 tests_since_best += 1
@@ -264,14 +271,97 @@ def train_resnet(config):
                     )
                     break
     if not config.use_early_stopping:
-        model_save_path = os.path.join(config.resnet_save_dir, f"{config.dataset}_resnet.ckpt")
+        model_save_path = os.path.join(
+            config.resnet_save_dir, f"{config.dataset}_resnet.ckpt")
         torch.save(model.state_dict(), model_save_path)
         print(f"Saved model into path {model_save_path}")
+
+
+def resnet_accuracy(model: ResNet, dataset) -> dict:
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device == "cuda":
+        # Counters for (true|false) (positives|negatives)
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    tp = tn = fp = fn = 0
+    n_correct = 0
+    n_total = 0
+    for x, y in tqdm(dataset, total=len(dataset)):
+        if y.shape[1] > 1:
+            y = y[:, 0:1]
+        y = y.to(device)
+        x = x.to(device)
+        with torch.cuda.amp.autocast():
+            output = model(x).to(device)
+        pred = output >= 0.5
+        # tricky bitmagic, but I am almost confident it works
+        # EXAMPLE:
+        # >>> y
+        # tensor([1, 0, 0, 1])
+        # >>> pred
+        # tensor([1, 0, 1, 0])
+        # >>> ~pred.eq(y) # This is the elements that were misclassified
+        # tensor([False, False,  True,  True])
+        # >>> (~pred.eq(y)).logical_and(1-y) # Elements that are misclassified as 1
+        # tensor([False, False,  True, False])
+        # >>> (~pred.eq(y)).logical_and(y) # Elements that are misclassified and 0
+        # tensor([False, False, False,  True])
+        result = pred.eq(y)
+        true_positive = result.logical_and(y).sum().item()
+        true_negative = result.logical_and(1-y).sum().item()
+        false_positive = (~result).logical_and(1-y).sum().item()
+        false_negative = (~result).logical_and(y).sum().item()
+        tp += true_positive
+        tn += true_negative
+        fp += false_positive
+        fn += false_negative
+        n_correct += result.sum().item()
+        n_total += y.shape[0]
+    accuracy = n_correct / n_total
+    sensitivity = tp / float(tp + fn)
+    specificity = tn / float(tn + fp)
+    return {
+        "acc": round(accuracy, 4),
+        "TPR": round(sensitivity, 4),
+        "TNR": round(specificity, 4),
+        "TP": tp,
+        "TN": tn,
+        "FP": fp,
+        "FN": fn,
+        "n_correct": n_correct,
+        "n_total": n_total
+    }
+
+
+def evaluate_resnet(config):
+    dataset = get_loader(
+        config.image_dir,
+        config.attr_path,
+        config.selected_attrs,
+        config.crop_size,
+        config.image_size,
+        config.batch_size,
+        config.dataset,
+        config.eval_split,
+        config.num_workers,
+        config.in_memory,
+        weighted=False,
+        augment=False,
+        match_distribution=True,
+        subsample_offset=1 if config.dataset == "CelebA" else None,
+    )
+    resnet_path = os.path.join(config.resnet_save_dir, config.resnet_filename)
+    resnet = ResNet(num_classes=1)
+    resnet.load_state_dict(torch.load(resnet_path), strict=False)
+    resnet.eval()
+    results = resnet_accuracy(resnet, dataset)
+    print(results)
 
 
 def main(config):
     if config.mode == "train":
         train_resnet(config)
+    elif config.mode == "evaluate":
+        evaluate_resnet(config)
 
 
 if __name__ == "__main__":
@@ -283,61 +373,80 @@ if __name__ == "__main__":
     parser.add_argument(
         "--crop_size", type=int, default=178, help="crop size for the images"
     )
-    parser.add_argument("--image_size", type=int, default=128, help="image resolution")
+    parser.add_argument("--image_size", type=int,
+                        default=128, help="image resolution")
 
     # Training configuration.
-    parser.add_argument("--in_memory", action="store_true", help="Store dataset in RAM")
-    parser.add_argument("--dataset", type=str, default="PCam", choices=["PCam", "CelebA"])
-    parser.add_argument("--batch_size", type=int, default=16, help="mini-batch size")
+    parser.add_argument("--in_memory", action="store_true",
+                        help="Store dataset in RAM")
+    parser.add_argument("--dataset", type=str,
+                        default="PCam", choices=["PCam", "CelebA"])
+    parser.add_argument("--batch_size", type=int,
+                        default=16, help="mini-batch size")
     parser.add_argument(
         "--epochs", type=int, default=200000, help="number of total epochs for training"
     )
-    parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
+    parser.add_argument("--lr", type=float, default=0.0001,
+                        help="learning rate")
     parser.add_argument(
         "--beta1", type=float, default=0.5, help="beta1 for Adam optimizer"
     )
     parser.add_argument(
         "--beta2", type=float, default=0.999, help="beta2 for Adam optimizer"
     )
-    parser.add_argument("--use_early_stopping", action="store_true", default=True)
+    parser.add_argument("--use_early_stopping",
+                        action="store_true", default=True)
     parser.add_argument(
         "--patience",
         type=int,
         default=2,
         help="patience for early stopping measured in validation loss tracking",
     )
-    parser.add_argument('--selected_attrs', '--list', nargs='+', help='selected attributes for the CelebA dataset', default=None)    
+    parser.add_argument('--selected_attrs', '--list', nargs='+',
+                        help='selected attributes for the CelebA dataset', default=None)
     parser.add_argument("--attr_path", type=str, default=None)
+
+    # Evaluation configuration
+    parser.add_argument("--eval_split", type=str, choices=["train", "val", "test"])
+    parser.add_argument(
+        "--resnet_filename",
+        type=str,
+        help="File name (not path) of resnet to evaluate. Directory is given by resnet_save_dir"
+    )
 
     # Miscellaneous.
     parser.add_argument("--num_workers", type=int, default=1)
     parser.add_argument(
-        "--mode", type=str, default="train", choices=["train", "test", "test_brats"]
+        "--mode", type=str, default="train", choices=["train", "evaluate"]
     )
     parser.add_argument("--use_tensorboard", action="store_true")
     parser.add_argument(
         "--verbose", action="store_true", help="Print loss after each batch"
     )
-    parser.add_argument("--progress_bar", action="store_true", help="Print progress bars")
+    parser.add_argument("--progress_bar", action="store_true",
+                        help="Print progress bars")
 
     # Directories.
     parser.add_argument("--image_dir", type=str, default="data/pcam")
     parser.add_argument("--log_dir", type=str, default="pcam/resnet/logs")
-    parser.add_argument("--resnet_save_dir", type=str, default="pcam/resnet/models")
+    parser.add_argument("--resnet_save_dir", type=str,
+                        default="pcam/resnet/models")
     parser.add_argument(
-        "--model_save_dir", 
-        type=str, 
-        default="pcam/models", 
+        "--model_save_dir",
+        type=str,
+        default="pcam/models",
         help="Directory where GAN models are saved"
     )
-    parser.add_argument("--train_on", type=str, default="train", choices=["train", "val"])
+    parser.add_argument("--train_on", type=str,
+                        default="train", choices=["train", "val"])
 
     parser.add_argument(
         "--generator_iters",
         type=int,
         help="Train on generated data from a model restored form the supplied iteration."
     )
-    parser.add_argument("--generator_op", type=str, choices=["id","tilde","random"], help="The generator transformation to apply.")
+    parser.add_argument("--generator_op", type=str, choices=[
+                        "id", "tilde", "random"], help="The generator transformation to apply.")
 
     config = parser.parse_args()
     main(config)
