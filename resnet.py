@@ -1,4 +1,6 @@
 # Ignore futurewarnings from using old version of tensorboard
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 from collections import namedtuple
 import os
 from tqdm import tqdm
