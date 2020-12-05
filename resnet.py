@@ -93,7 +93,7 @@ def train_resnet(config):
         config.image_size,
         config.batch_size,
         config.dataset,
-        "train",
+        config.train_on,
         config.num_workers,
         config.in_memory,
         weighted=config.dataset == "CelebA",
@@ -109,13 +109,13 @@ def train_resnet(config):
         config.image_size,
         config.batch_size,
         config.dataset,
-        "val",
+        config.early_stopping_split,
         config.num_workers,
         config.in_memory,
         weighted=config.dataset == "CelebA",
         augment=config.generator_iters is not None,
         match_distribution=True,
-        subsample_offset=0,
+        subsample_offset=1,
     )
 
     if config.generator_iters is None:
@@ -127,8 +127,6 @@ def train_resnet(config):
         # Train on generated images from validation set.
         # This is not optimal, but better than training on
         # the training set.
-    if config.generator_iters is not None or config.train_on == "val":
-        train_data, val_data = val_data, train_data
 
     loss_function = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(
@@ -351,7 +349,7 @@ def evaluate_resnet(config):
         weighted=False,
         augment=False,
         match_distribution=True,
-        subsample_offset=1 if config.dataset == "CelebA" else None,
+        subsample_offset=0,
     )
     resnet_path = os.path.join(config.resnet_save_dir, config.resnet_filename)
     resnet = ResNet(num_classes=1)
@@ -419,6 +417,7 @@ if __name__ == "__main__":
                         help='selected attributes for the CelebA dataset', default=None)
     parser.add_argument("--attr_path", type=str, default=None)
 
+    parser.add_argument("--early_stopping_split", type=str, choices=["train", "val"])
     # Evaluation configuration
     parser.add_argument("--eval_split", type=str, choices=["train", "val", "test"])
     parser.add_argument(
