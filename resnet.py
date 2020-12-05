@@ -58,6 +58,26 @@ class ResNet(nn.Module):
         return self.activation(x)
 
 
+def _transform_batch(generator, x, y, device, op):
+    if generator is None:
+        raise ValueError("Must have provided generator")
+    if op == "id":
+        y_trg = y
+    elif op == "tilde":
+        # Only flip first attribute. Assumed to be glasses.
+        y_trg = y.clone().to(device)
+        y_trg[:, 0] = (~y_trg[:, 0].bool()).float()
+    elif op == "random":
+        y_trg = y.clone().to(device)
+        distribution = torch.distributions.bernoulli.Bernoulli(
+            0.5*torch.ones_like(y_trg[:, 0]))
+        y_trg[:, 0] = distribution.sample()
+    else:
+        raise ValueError("Invalid generator_op")
+    x_out = generator.transform_batch(x, y_trg)
+    return x_out, y_trg
+
+
 def train_resnet(config):
     logger = Logger(config.log_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -112,25 +132,6 @@ def train_resnet(config):
     if config.generator_iters is not None or config.train_on == "val":
         train_data, val_data = val_data, train_data
 
-    def _transform_batch(x, y):
-        if generator is None:
-            raise ValueError("Must have provided generator")
-        if config.generator_op == "id":
-            y_trg = y
-        elif config.generator_op == "tilde":
-            # Only flip first attribute. Assumed to be glasses.
-            y_trg = y.clone().to(device)
-            y_trg[:, 0] = (~y_trg[:, 0].bool()).float()
-        elif config.generator_op == "random":
-            y_trg = y.clone().to(device)
-            distribution = torch.distributions.bernoulli.Bernoulli(
-                0.5*torch.ones_like(y_trg[:, 0]))
-            y_trg[:, 0] = distribution.sample()
-        else:
-            raise ValueError("Invalid generator_op")
-        x_out = generator.transform_batch(x, y_trg)
-        return x_out, y_trg
-
     loss_function = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(
         model.parameters(), lr=config.lr, betas=[config.beta1, config.beta2]
@@ -156,8 +157,7 @@ def train_resnet(config):
         tqdm.write("Training")
         for batch_idx, (x, y) in enumerate(train_data, 1):
             if generator is not None:
-                x, y = _transform_batch(x, y)
-
+                x, y = _transform_batch(generator, x, y, device, config.generator_op)
             model.train()
             optimizer.zero_grad()
             x = x.to(device)
@@ -207,7 +207,7 @@ def train_resnet(config):
             correct_negative = 0
             for batch_idx, (x, y) in enumerate(val_data, 1):
                 if generator is not None:
-                    x, y = _transform_batch(x, y)
+                    x, y = _transform_batch(generator, x, y, device, config.generator_op)
                 x = x.to(device)
                 if y.shape[1] > 1:
                     # Only extract first attribute.
