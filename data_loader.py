@@ -64,7 +64,7 @@ class CelebA(data.Dataset):
             # and the dataset size.
             test_labels = [l[0] for _, l in self.test_dataset]
             num_zeroes = len([l for l in test_labels if l == 0])
-            num_ones = len([l for l in test_labels if l == 0])
+            num_ones = len([l for l in test_labels if l == 1])
             train_zeroes = [[f, l] for f, l in self.train_dataset if l[0] == 0]
             train_ones = [[f, l] for f, l in self.train_dataset if l[0] == 1]
             self.train_dataset = train_zeroes[num_zeroes*self.subsample_offset:num_zeroes*(self.subsample_offset + 1)] + train_ones[num_ones*self.subsample_offset:num_ones*(self.subsample_offset + 1)]
