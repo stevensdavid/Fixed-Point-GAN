@@ -277,21 +277,19 @@ def train_resnet(config):
         print(f"Saved model into path {model_save_path}")
 
 
-def resnet_accuracy(model: ResNet, dataset, generator=None, generator_op=None) -> dict:
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if device == "cuda":
-        # Counters for (true|false) (positives|negatives)
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+def resnet_accuracy(model: ResNet, dataset, device, generator=None, generator_op=None, progress_bar=True) -> dict:
     tp = tn = fp = fn = 0
     n_correct = 0
     n_total = 0
-    for x, y in tqdm(dataset, total=len(dataset)):
-        y = y.to(device)
+    for x, y in tqdm(dataset, total=len(dataset), disable=not progress_bar):
         x = x.to(device)
+        y = y.to(device)
         if generator is not None:
             x, y = _transform_batch(generator, x, y, device, generator_op)
         if y.shape[1] > 1:
             y = y[:, 0:1]
+        x = x.to(device)
+        y = y.to(device)
         with torch.cuda.amp.autocast():
             output = model(x).to(device)
         pred = output >= 0.5
@@ -335,6 +333,10 @@ def resnet_accuracy(model: ResNet, dataset, generator=None, generator_op=None) -
 
 
 def evaluate_resnet(config):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device == "cuda":
+        # Counters for (true|false) (positives|negatives)
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
     dataset = get_loader(
         config.image_dir,
         config.attr_path,
@@ -355,13 +357,16 @@ def evaluate_resnet(config):
     resnet = ResNet(num_classes=1)
     resnet.load_state_dict(torch.load(resnet_path), strict=False)
     resnet.eval()
+    resnet.to(device)
     if config.generator_iters is None:
         generator = None
     else:
         config = add_missing_solver_args(config)
         generator = Solver(dataset, config, train_mode=False)
         generator.restore_model(config.generator_iters)
-    results = resnet_accuracy(resnet, dataset, generator, config.generator_op)
+    results = resnet_accuracy(
+        resnet, dataset, device, generator, config.generator_op, config.eval_progress_bar
+    )
     print(results)
 
 
@@ -455,6 +460,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--generator_op", type=str, choices=[
                         "id", "tilde", "random"], help="The generator transformation to apply.")
+    parser.add_argument("--eval_progress_bar", action="store_true")
 
     config = parser.parse_args()
     main(config)
