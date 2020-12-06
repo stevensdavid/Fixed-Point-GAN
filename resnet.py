@@ -134,7 +134,7 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
                     new_x, new_y = _transform_batch(generator, x, y, device, config.generator_op)
                     new_y = new_y[:, 0]
                 for image, label in zip(new_x, new_y):
-                    fp = os.path.join(dir, str(int(label.item())), f"{uuid4()}.jpg")
+                    fp = os.path.join(dir, str(int(label.item())), f"{uuid4()}.png")
                     if not os.path.exists(os.path.dirname(fp)):
                         os.makedirs(os.path.dirname(fp))
                     save_image(generator.denorm(image.data.cpu()), fp, nrow=1, padding=0)
