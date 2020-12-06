@@ -148,13 +148,15 @@ class BRATS_SYN(data.Dataset):
 class PCam(data.Dataset):
     """Dataset class for the PatchCamelyon dataset."""
 
-    def __init__(self, image_dir, transform, mode, in_memory):
+    def __init__(self, image_dir, transform, mode, in_memory, match_distribution):
         """Initialize and Load the PCam dataset."""
         if mode not in ("train", "test", "val"):
             raise ValueError(f"Support modes are train, test and val, received: {mode}")
         self.image_dir = image_dir
         self.transform = transform
         self.mode = mode
+        self.match_distribution = match_distribution
+        self.mask = None
         self.x = None
         self.y = None
         self.preloaded = in_memory
@@ -175,6 +177,7 @@ class PCam(data.Dataset):
         else:
             raise ValueError(f"Support modes are train, test and val, received: {mode}")
         if self.preloaded:
+            raise NotImplementedError("This is buggy")
             print(f"Loading {self.mode}_x")
             self.x = [self.transform(Image.fromarray(x.astype('uint8'), 'RGB')) for x in h5py.File(os.path.join(self.image_dir, x_file), 'r', swmr=True)['x']]
             print(f"Loading {self.mode}_y")
@@ -182,9 +185,22 @@ class PCam(data.Dataset):
             self.num_images = len(self.x)
         else:
             self.x = os.path.join(self.image_dir, x_file)
-            x = h5py.File(os.path.join(self.image_dir, x_file), 'r', swmr=True)['x']
-            self.num_images = len(x)
             self.y = os.path.join(self.image_dir, y_file)
+            y = h5py.File(self.y, 'r', swmr=True)['y']
+            if self.match_distribution:
+                # PCam val/test splits consist of 2**14 samples of each class
+                n = 2**14
+                labels = np.squeeze(y)
+                one_idxs = np.where(labels == 1)[0]
+                zero_idxs = np.where(labels == 0)[0]
+                np.random.seed(1234)
+                ones = np.random.permutation(one_idxs)[:n]
+                zeroes = np.random.permutation(zero_idxs)[:n]
+                self.mask = np.sort(np.concatenate((ones, zeroes)))
+                self.num_images = len(self.mask)
+            else:
+                self.num_images = len(y)
+                self.mask = np.arange(self.num_images)
         # TODO: Pre-loading the files here would be faster, but I have not been able
         #       to make it work as the h5py objects cannot be pickled and can
         #       therefore not be used in PyTorch. This can probably be fixed, but I
@@ -197,18 +213,21 @@ class PCam(data.Dataset):
     def get_labels(self):
         """Return all labels"""
         y = h5py.File(self.y, 'r', swmr=True)['y']
+        if self.mask is not None:
+            y = y[self.mask, ...]
         return y.flatten()
 
     def __getitem__(self, index):
         """Return one image and its corresponding attribute label."""
         if self.preloaded:
+            raise NotImplementedError("Buggy")
             x = self.x[index]
             y = self.y[index]
             return self.x[index], self.y[index]
         x = h5py.File(self.x, 'r', swmr=True)['x']
         y = h5py.File(self.y, 'r', swmr=True)['y']
-        img = Image.fromarray(x[index, ...].astype('uint8'), 'RGB')
-        return self.transform(img), torch.from_numpy(y[index, ...].flatten()).float()
+        img = Image.fromarray(x[self.mask[index], ...].astype('uint8'), 'RGB')
+        return self.transform(img), torch.from_numpy(y[self.mask[index], ...].flatten()).float()
 
     def __len__(self):
         """Return the number of images."""
@@ -236,7 +255,7 @@ def get_loader(image_dir, attr_path, selected_attrs, crop_size=178, image_size=1
     elif dataset == 'BRATS':
         dataset = BRATS_SYN(image_dir, transform, mode)
     elif dataset == 'PCam':
-        dataset = PCam(image_dir, transform, mode, in_memory)
+        dataset = PCam(image_dir, transform, mode, in_memory, match_distribution)
     
     elif dataset == 'Directory':
         dataset = ImageFolder(image_dir, transform)
