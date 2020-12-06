@@ -14,7 +14,10 @@ from data_loader import get_loader
 from torchvision.models.resnet import resnet50
 import torch
 from solver import Solver
-
+from torchvision.utils import save_image
+from uuid import uuid4
+from tempfile import mkdtemp
+from shutil import rmtree
 
 def add_missing_solver_args(config):
     # Model configurations.
@@ -76,7 +79,7 @@ def _transform_batch(generator, x, y, device, op):
     return x_out, y_trg
 
 
-def train_resnet(config):
+def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
     logger = Logger(config.log_dir)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if device == "cuda":
@@ -118,15 +121,54 @@ def train_resnet(config):
         subsample_offset=1,
     )
 
-    if config.generator_iters is None:
-        generator = None
-    else:
+    if config.generator_iters is not None:
         config = add_missing_solver_args(config)
         generator = Solver(train_data, config, train_mode=False)
         generator.restore_model(config.generator_iters)
         # Train on generated images from validation set.
         # This is not optimal, but better than training on
         # the training set.
+        for dataset, split, dir in [(train_data, "train", tmp_train_dir), (val_data, "val", tmp_val_dir)]:
+            for x, y in tqdm(dataset, desc=f"Generating {split} data", total=len(dataset)):
+                new_x, new_y = _transform_batch(generator, x, y, device, config.generator_op)
+                new_y = new_y[:, 0]
+                for image, label in zip(new_x, new_y):
+                    fp = os.path.join(dir, str(int(label.item())), f"{uuid4()}.jpg")
+                    if not os.path.exists(os.path.dirname(fp)):
+                        os.makedirs(os.path.dirname(fp))
+                    save_image(generator.denorm(image.data.cpu()), fp, nrow=1, padding=0)
+        train_data = get_loader(
+            tmp_train_dir,
+            None,
+            None,
+            config.crop_size,
+            config.image_size,
+            config.batch_size,
+            "Directory",
+            mode=None,
+            num_workers=config.num_workers,
+            in_memory=config.in_memory,
+            weighted=config.dataset == "CelebA",
+            augment=False,
+            match_distribution=True,
+            subsample_offset=0,
+        )
+        val_data = get_loader(
+            tmp_val_dir,
+            None,
+            None,
+            config.crop_size,
+            config.image_size,
+            config.batch_size,
+            "Directory",
+            mode=None,
+            num_workers=config.num_workers,
+            in_memory=config.in_memory,
+            weighted=config.dataset == "CelebA",
+            augment=False,
+            match_distribution=True,
+            subsample_offset=0,
+        )
 
     loss_function = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(
@@ -152,11 +194,10 @@ def train_resnet(config):
         # Training
         tqdm.write("Training")
         for batch_idx, (x, y) in enumerate(train_data, 1):
-            if generator is not None:
-                x, y = _transform_batch(generator, x, y, device, config.generator_op)
-            model.train()
             optimizer.zero_grad()
             x = x.to(device)
+            if len(y.shape) == 1:
+                y = torch.unsqueeze(y, dim=1)
             if y.shape[1] > 1:
                 # Only extract first attribute.
                 y = y[:, 0:1]
@@ -202,8 +243,8 @@ def train_resnet(config):
             correct_positive = 0
             correct_negative = 0
             for batch_idx, (x, y) in enumerate(val_data, 1):
-                if generator is not None:
-                    x, y = _transform_batch(generator, x, y, device, config.generator_op)
+                if len(y.shape) == 1:
+                    y = torch.unsqueeze(y, dim=1)
                 x = x.to(device)
                 if y.shape[1] > 1:
                     # Only extract first attribute.
@@ -370,7 +411,17 @@ def evaluate_resnet(config):
 
 def main(config):
     if config.mode == "train":
-        train_resnet(config)
+        if config.generator_iters is not None:
+            train_dir = mkdtemp()
+            val_dir = mkdtemp()
+        else:
+            train_dir = val_dir = None
+        try:
+            train_resnet(config, train_dir, val_dir)
+        finally:
+            if train_dir is not None:
+                rmtree(train_dir)
+                rmtree(val_dir)
     elif config.mode == "evaluate":
         evaluate_resnet(config)
 
