@@ -130,8 +130,9 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
         # the training set.
         for dataset, split, dir in [(train_data, "train", tmp_train_dir), (val_data, "val", tmp_val_dir)]:
             for x, y in tqdm(dataset, desc=f"Generating {split} data", total=len(dataset)):
-                new_x, new_y = _transform_batch(generator, x, y, device, config.generator_op)
-                new_y = new_y[:, 0]
+                with torch.cuda.amp.autocast(), torch.no_grad(): 
+                    new_x, new_y = _transform_batch(generator, x, y, device, config.generator_op)
+                    new_y = new_y[:, 0]
                 for image, label in zip(new_x, new_y):
                     fp = os.path.join(dir, str(int(label.item())), f"{uuid4()}.jpg")
                     if not os.path.exists(os.path.dirname(fp)):
@@ -169,6 +170,8 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
             match_distribution=True,
             subsample_offset=0,
         )
+        del generator
+        torch.cuda.empty_cache()
 
     loss_function = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(
