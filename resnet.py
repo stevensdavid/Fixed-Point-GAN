@@ -100,7 +100,7 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
         config.num_workers,
         config.in_memory,
         weighted=config.dataset == "CelebA",
-        augment=config.generator_iters is None,
+        augment=True,
         match_distribution=True,
         subsample_offset=0,
     )
@@ -116,7 +116,7 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
         config.num_workers,
         config.in_memory,
         weighted=config.dataset == "CelebA",
-        augment=config.generator_iters is not None,
+        augment=True,
         match_distribution=True,
         subsample_offset=1,
     )
