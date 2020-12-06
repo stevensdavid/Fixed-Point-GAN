@@ -306,8 +306,10 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
                 best_model_save_path = os.path.join(
                     config.resnet_save_dir, f"{config.dataset}_resnet_best.ckpt")
                 torch.save(model.state_dict(), best_model_save_path)
+                tqdm.write("New best model")
             else:
                 tests_since_best += 1
+                tqdm.write(f"Patience at {tests_since_best}/{config.patience}")
                 if tests_since_best >= config.patience:
                     tqdm.write(
                         f"Reached early stopping threshold with patience {config.patience}."
