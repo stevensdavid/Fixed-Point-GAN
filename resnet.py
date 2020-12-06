@@ -197,7 +197,8 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
             optimizer.zero_grad()
             x = x.to(device)
             if len(y.shape) == 1:
-                y = torch.unsqueeze(y, dim=1)
+                # this is from a directory, labels are longs and should be float
+                y = torch.unsqueeze(y, dim=1).float()
             if y.shape[1] > 1:
                 # Only extract first attribute.
                 y = y[:, 0:1]
@@ -244,7 +245,7 @@ def train_resnet(config, tmp_train_dir=None, tmp_val_dir=None):
             correct_negative = 0
             for batch_idx, (x, y) in enumerate(val_data, 1):
                 if len(y.shape) == 1:
-                    y = torch.unsqueeze(y, dim=1)
+                    y = torch.unsqueeze(y, dim=1).float()
                 x = x.to(device)
                 if y.shape[1] > 1:
                     # Only extract first attribute.
