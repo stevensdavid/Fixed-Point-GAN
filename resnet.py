@@ -330,7 +330,8 @@ def resnet_accuracy(model: ResNet, dataset, device, generator=None, generator_op
         x = x.to(device)
         y = y.to(device)
         if generator is not None:
-            x, y = _transform_batch(generator, x, y, device, generator_op)
+            with torch.cuda.amp.autocast(), torch.no_grad():
+                x, y = _transform_batch(generator, x, y, device, generator_op)
         if y.shape[1] > 1:
             y = y[:, 0:1]
         x = x.to(device)
